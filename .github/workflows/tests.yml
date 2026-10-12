@@ -236,7 +236,7 @@ jobs:
           - shard: fullscreen
             classes: TileFullscreenUITests MinimizedCallUITests OverflowMenuUITests
           - shard: stage
-            classes: SmallCallUITests StageScrollUITests ScrollPerformanceUITests
+            classes: SmallCallUITests StageScrollUITests ScrollPerformanceUITests RaisedHandUITests
           # The oldest iOS the package supports, for the chrome's taps only. SwiftUI arbitrates a
           # tap between a view and its parent differently there: iOS 18 gave the stage a tap on a
           # tile as well, and the chrome hid and came straight back, which no iOS 26 run could see.
@@ -255,7 +255,7 @@ jobs:
 
       - name: Fail if a UI test class is in no shard
         env:
-          SHARDED: ChromeVisibilityUITests AudioOutputUITests TileFullscreenUITests MinimizedCallUITests OverflowMenuUITests SmallCallUITests StageScrollUITests ScrollPerformanceUITests
+          SHARDED: ChromeVisibilityUITests AudioOutputUITests TileFullscreenUITests MinimizedCallUITests OverflowMenuUITests SmallCallUITests StageScrollUITests ScrollPerformanceUITests RaisedHandUITests
         run: |
           missing=0
           for class in $(sed -nE 's/^(final )?class ([A-Za-z0-9_]+UITests)[: ].*/\2/p' Example/ElementCallExampleUITests/*.swift); do
