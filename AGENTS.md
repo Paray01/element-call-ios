@@ -334,8 +334,8 @@ constant reads as the previous release, which is only ever visible in a build ma
 repository rather than from a tag.
 
 `ElementCallVersion.core` sits beside it and names the matrix-rust-rtc release, which the menu shows
-as Android's does. It is the one version edited by hand, in the same change that moves the
-`Package.swift` pin, and the `Tests` workflow fails when the two disagree.
+as Android's does. It is read from the core's own `sdkVersion()`, so moving the `Package.swift` pin
+needs no other edit.
 
 The pipeline is `.github/workflows/release.yml` plus `scripts/release.sh`, which holds all of the
 validation and never touches the remote so it can be rehearsed locally. Release notes come from the

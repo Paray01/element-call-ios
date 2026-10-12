@@ -153,18 +153,6 @@ jobs:
           swiftformat --lint .
           swiftlint
 
-      # ElementCallVersion.core is written by hand beside the matrix-rust-rtc pin, because nothing at
-      # runtime can read the pin. Checked here rather than in a test: the simulator's test runner is
-      # refused files the checkout wrote, the same provenance block the snapshot references hit.
-      - name: Fail if the core version disagrees with the pin
-        run: |
-          pin="$(sed -nE 's|^[[:space:]]*\.package\(url: "https://github.com/element-hq/matrix-rust-rtc", exact: "([^"]+)".*|\1|p' Package.swift)"
-          core="$(sed -nE 's|.*static let core = "([^"]+)".*|\1|p' Sources/ElementCallKit/API/ElementCallVersion.swift)"
-          if [ -z "$pin" ] || [ "$pin" != "$core" ]; then
-            echo "::error::ElementCallVersion.core is '$core' but Package.swift pins matrix-rust-rtc '$pin'."
-            exit 1
-          fi
-
       # Regenerated rather than trusted, then checked for drift: the committed file is what a
       # developer reads in a diff, so it must not go stale.
       - name: Generate preview tests
