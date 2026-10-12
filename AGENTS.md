@@ -96,8 +96,9 @@ them**, despite the comment in `tests.yml` saying so: `XCODE_APP`, `SIMULATOR_NA
 three edits, not one. `release.yml` is deliberately not a fourth: it runs on Linux and gates on the
 `Tests` run for the commit rather than testing anything itself, and the example harness below is not
 a fourth either: its `ui-tests` job, sharded by test class so the wall clock is the longest shard
-rather than all 18 minutes, reads the same workflow-level `env` as the package job. **A new UI test
-class must be added to a shard** in that job's matrix and to its `SHARDED` list; the job fails if one
+rather than all 18 minutes, reads the same workflow-level `env` as the package job. One shard,
+`chrome-ios18`, swaps the runtime for iOS 18, the oldest supported: SwiftUI hands a tap on a tile to
+the stage behind it there as well, which no iOS 26 run can see. **A new UI test class must be added to a shard** in that job's matrix and to its `SHARDED` list; the job fails if one
 is in none.
 
 ### The example harness and the UI tests

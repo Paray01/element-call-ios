@@ -170,6 +170,14 @@ struct ElementCallStage: View {
             let floatingBounds = ElementCallSmallCallLayout.floatingBounds(metrics: metrics, insets: floatingInsets)
             ScrollView(.vertical) {
                 ZStack(alignment: .topLeading) {
+                    // The gaps between tiles and below the last row (017 R14). Behind the tiles
+                    // rather than on the content root above them: from there, iOS 18 delivered a
+                    // tap on a tile to this as well, once the tile's double tap had failed, and
+                    // the chrome hid and came straight back. A sibling only gets what no tile took.
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { onToggleChrome() }
+                        .zIndex(-1)
                     fullscreenScrim(in: stage)
                     ForEach(stage.placements) { placement in
                         tileView(for: placement, in: stage)
@@ -208,9 +216,6 @@ struct ElementCallStage: View {
                                                         excluded: stage.heroStack != nil && metrics.isLandscape
                                                             ? stage.placements.first(where: \.isSpotlight).map { [Self.arrowFrame(step: -1, spotlight: $0.frame), Self.arrowFrame(step: 1, spotlight: $0.frame)] } ?? []
                                                             : []) { step in showHero(step, in: stage) })
-                // The gaps between tiles and below the last row (017 R14). A tile's own tap wins
-                // over this one, so a tap on a tile toggles once.
-                .onTapGesture { onToggleChrome() }
                 .gesture(ownTileDragGesture(floating: floating, bounds: floatingBounds, width: metrics.area.width))
                 .transaction(value: fullscreenID) { transaction in
                     // Inside the stack's spring, so this is the move the completion waits for. With

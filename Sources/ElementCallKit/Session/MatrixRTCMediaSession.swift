@@ -302,10 +302,12 @@ public final class MatrixRTCMediaSession {
                 do {
                     // simulcast is not a quality setting: with one layer dynacast pauses the only
                     // encoding nobody's small tile asked for and no video leaves the device.
+                    // The size is the one the frames will have, since the layers are derived from it.
+                    let size = capturesCamera ? camera.publishedSize : CameraCaptureFormat.fallbackOutput
                     track = try await mediaSession.publish(options: FfiPublishOptions(kind: .camera,
                                                                                       audio: nil,
-                                                                                      video: FfiVideoSourceConfig(width: CameraCapturer.captureWidth,
-                                                                                                                  height: CameraCapturer.captureHeight),
+                                                                                      video: FfiVideoSourceConfig(width: UInt32(size.width),
+                                                                                                                  height: UInt32(size.height)),
                                                                                       simulcast: true,
                                                                                       muted: false))
                 } catch {

@@ -237,6 +237,13 @@ jobs:
             classes: TileFullscreenUITests MinimizedCallUITests OverflowMenuUITests
           - shard: stage
             classes: SmallCallUITests StageScrollUITests ScrollPerformanceUITests
+          # The oldest iOS the package supports, for the chrome's taps only. SwiftUI arbitrates a
+          # tap between a view and its parent differently there: iOS 18 gave the stage a tap on a
+          # tile as well, and the chrome hid and came straight back, which no iOS 26 run could see.
+          # Not a second copy of every shard: this is the class whose gestures overlap the most.
+          - shard: chrome-ios18
+            classes: ChromeVisibilityUITests
+            ios: '18.6'
     concurrency:
       group: ${{ github.ref == 'refs/heads/main' && format('ui-tests-{0}-main-{1}', matrix.shard, github.sha) || format('ui-tests-{0}-{1}', matrix.shard, github.ref) }}
       cancel-in-progress: true
@@ -274,10 +281,29 @@ jobs:
       - name: Install tools
         run: brew install xcodegen
 
+      # The pinned runtime, or for a shard that names an older iOS, the newest of that major the
+      # image has, and the named version downloaded if it has none. Picked before downloading: the
+      # image's older runtimes change under us, and a download costs minutes on every run.
       - name: Create the simulator
         id: simulator
+        env:
+          IOS_VERSION: ${{ matrix.ios }}
         run: |
-          udid=$(xcrun simctl create "$SIMULATOR_LABEL" "$SIMULATOR_NAME" "$SIMULATOR_RUNTIME")
+          runtime="$SIMULATOR_RUNTIME"
+          if [ -n "$IOS_VERSION" ]; then
+            major="${IOS_VERSION%%.*}"
+            find_runtime() {
+              xcrun simctl list runtimes -j | jq -r --arg v "$major." \
+                '[.runtimes[] | select(.platform == "iOS" and .isAvailable and (.version | startswith($v)))] | last | .identifier // empty'
+            }
+            runtime=$(find_runtime)
+            if [ -z "$runtime" ]; then
+              xcodebuild -downloadPlatform iOS -buildVersion "$IOS_VERSION"
+              runtime=$(find_runtime)
+            fi
+            [ -n "$runtime" ] || { echo "::error::No iOS $major simulator runtime on this image."; exit 1; }
+          fi
+          udid=$(xcrun simctl create "$SIMULATOR_LABEL" "$SIMULATOR_NAME" "$runtime")
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
       - name: Generate the example project
