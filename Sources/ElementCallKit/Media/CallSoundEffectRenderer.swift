@@ -8,15 +8,20 @@
 import AVFoundation
 import Synchronization
 
-/// The join and leave sounds' render path: one source node on the call's own engine, so they go
+/// A short cue mixed over the call, as opposed to the call's own audio.
+nonisolated enum CallSoundEffect: CaseIterable, Sendable {
+    case join, leave
+}
+
+/// The call's sound effects' render path: one source node on the call's own engine, so they go
 /// wherever the call's audio goes, at the call's volume, mixed over the voices rather than
 /// interrupting them. A separate player would have its own route and volume and follow the ringer
 /// switch, which is what spec 024 rules out (R10, R14, R15, R16).
 ///
 /// Built like ``AudioPlaybackRenderer``: it owns its render block, cannot reach the engine, and
-/// renders without one in tests. One voice per sound, so a join and a leave close together overlap
+/// renders without one in tests. One voice per effect, so a join and a leave close together overlap
 /// instead of cutting each other off.
-final nonisolated class CallSoundRenderer: @unchecked Sendable {
+final nonisolated class CallSoundEffectRenderer: @unchecked Sendable {
     /// Web's default effect volume, relative to the call (R14).
     static let gain: Float = 0.5
     
@@ -29,7 +34,7 @@ final nonisolated class CallSoundRenderer: @unchecked Sendable {
     }
     
     /// From any thread. Restarts that sound from its beginning on the next render.
-    func play(_ sound: CallSound) {
+    func play(_ sound: CallSoundEffect) {
         voice(for: sound).trigger()
     }
     
@@ -57,7 +62,7 @@ final nonisolated class CallSoundRenderer: @unchecked Sendable {
         return noErr
     }
     
-    private func voice(for sound: CallSound) -> Voice {
+    private func voice(for sound: CallSoundEffect) -> Voice {
         switch sound {
         case .join: join
         case .leave: leave
@@ -97,7 +102,7 @@ final nonisolated class CallSoundRenderer: @unchecked Sendable {
             let available = min(count, samples.count - playhead)
             guard available > 0 else { return }
             for index in 0..<available {
-                output[index] += samples[playhead + index] * CallSoundRenderer.gain
+                output[index] += samples[playhead + index] * CallSoundEffectRenderer.gain
             }
             playhead += available
         }
@@ -106,12 +111,12 @@ final nonisolated class CallSoundRenderer: @unchecked Sendable {
 
 // MARK: - The bundled sounds
 
-nonisolated extension CallSoundRenderer {
+nonisolated extension CallSoundEffectRenderer {
     /// A renderer over the bundled files, or nil if they could not be decoded, which is logged: a
     /// call without its join sound is still a call.
-    static func bundled() -> CallSoundRenderer? {
+    static func bundled() -> CallSoundEffectRenderer? {
         guard let samples = bundledSamples else { return nil }
-        return CallSoundRenderer(join: samples.join, leave: samples.leave)
+        return CallSoundEffectRenderer(join: samples.join, leave: samples.leave)
     }
     
     /// Decoded once per process, on first use, and shared by every call after it.

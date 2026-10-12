@@ -53,7 +53,7 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
     /// `@unchecked` because AVFAudio's block typealiases are not `@Sendable`, and the attribute
     /// cannot be applied to a typealias, so there is no way to state what is actually true here:
     /// the only thing either box ever carries is `MicrophoneTap.receiverBlock`,
-    /// `AudioPlaybackRenderer.renderBlock` or `CallSoundRenderer.renderBlock`, and each of those
+    /// `AudioPlaybackRenderer.renderBlock` or `CallSoundEffectRenderer.renderBlock`, and each of those
     /// captures exactly one object, itself
     /// `@unchecked Sendable` and hand-synchronised for the render thread. Re-declaring Apple's
     /// signatures with `@Sendable` would make it checked, at the cost of duplicating them in six
@@ -133,7 +133,7 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
         }
     }
     
-    /// The call's join and leave sounds: one node for the life of the call, mixed like a member.
+    /// The call's sound effects: one node for the life of the call, mixed like a member.
     /// Not keyed with the members, so no member ID can ever collide with it.
     func setSoundEffectSource(render: @escaping AVAudioSourceNodeRenderBlock) {
         let boxed = SourceRenderBlock(block: render)

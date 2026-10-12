@@ -435,7 +435,7 @@ public final class ElementCallController {
             return
         }
         // Before anything else: from here on the session is handling the core's events.
-        call.participantCapForSounds = options.participantCapForSounds
+        call.participantCapForJoinLeaveSounds = options.participantCapForJoinLeaveSounds
         guard !Task.isCancelled else {
             await abandon(rtcCall: rtcCall, call: call, roomID: room.roomID)
             return

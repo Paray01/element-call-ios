@@ -154,19 +154,19 @@ public final class MatrixRTCMediaSession {
     private var tasks = [Task<Void, Never>]()
     
     /// Spec 024's default: no join or leave sound once more than this many are in the call.
-    public nonisolated static let defaultParticipantCapForSounds = 8
+    public nonisolated static let defaultParticipantCapForJoinLeaveSounds = 8
     
     /// Above this many people in the call, ourselves included, joins and leaves are silent. A host
     /// setting, applied by whoever connected the call.
-    public var participantCapForSounds: Int {
-        get { soundPolicy.participantCap }
-        set { soundPolicy.participantCap = newValue }
+    public var participantCapForJoinLeaveSounds: Int {
+        get { joinLeaveSoundPolicy.participantCap }
+        set { joinLeaveSoundPolicy.participantCap = newValue }
     }
     
-    /// The join and leave sounds. The renderer arrives once the bundled files are decoded, off this
-    /// actor; until then an announced change plays nothing.
-    @ObservationIgnored private var soundPolicy: CallSoundPolicy
-    @ObservationIgnored private var soundRenderer: CallSoundRenderer?
+    /// Whether a join or leave sounds, and what every sound effect plays through. The renderer
+    /// arrives once the bundled files are decoded, off this actor; until then nothing plays.
+    @ObservationIgnored private var joinLeaveSoundPolicy: JoinLeaveSoundPolicy
+    @ObservationIgnored private var soundEffectRenderer: CallSoundEffectRenderer?
     /// Time on ``clock`` since the session was made: what the sound throttle measures against.
     @ObservationIgnored private let elapsed: () -> Duration
     
@@ -205,7 +205,7 @@ public final class MatrixRTCMediaSession {
         self.mediaSession = mediaSession
         self.clock = clock
         self.capturesCamera = capturesCamera
-        soundPolicy = CallSoundPolicy(participantCap: Self.defaultParticipantCapForSounds)
+        joinLeaveSoundPolicy = JoinLeaveSoundPolicy(participantCap: Self.defaultParticipantCapForJoinLeaveSounds)
         elapsed = Self.stopwatch(clock)
         (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
     }
@@ -223,7 +223,7 @@ public final class MatrixRTCMediaSession {
         tasks.append(Task { [weak self] in await self?.pumpTileRoster() })
         tasks.append(Task { [weak self] in await self?.pumpLocalState() })
         tasks.append(Task { [weak self] in await self?.pollReceiveStats() })
-        tasks.append(Task { [weak self] in await self?.installCallSounds() })
+        tasks.append(Task { [weak self] in await self?.installSoundEffects() })
         seedParticipants()
         apply(mediaSession.roster())
         apply(mediaSession.localState())
@@ -775,7 +775,7 @@ public final class MatrixRTCMediaSession {
     
     public func disconnect() async {
         // First: everything below tears the call down, and none of it may sound like people leaving.
-        soundPolicy.silence()
+        joinLeaveSoundPolicy.silence()
         pendingReleases.values.forEach { $0.cancel() }
         pendingReleases.removeAll()
         tasks.forEach { $0.cancel() }
@@ -872,12 +872,12 @@ public final class MatrixRTCMediaSession {
         case .mediaConnectionDegraded(let degraded):
             isMediaDegraded = degraded
         case .participantJoined(let memberID, _, let participantCount):
-            playCallSound(.join, for: memberID, participantCount: participantCount)
+            playJoinLeaveSound(.join, for: memberID, participantCount: participantCount)
         case .participantLeft(let memberID, let participantCount):
-            playCallSound(.leave, for: memberID, participantCount: participantCount)
+            playJoinLeaveSound(.leave, for: memberID, participantCount: participantCount)
         case .ended(let reason):
             MatrixRTCLog.info("Media session ended: \(reason)")
-            soundPolicy.silence()
+            joinLeaveSoundPolicy.silence()
             hasEnded = true
             playbackSinks.values.forEach { $0.stop() }
             playbackSinks.removeAll()
@@ -886,23 +886,23 @@ public final class MatrixRTCMediaSession {
         }
     }
     
-    // MARK: - Join and leave sounds
+    // MARK: - Sound effects
     
     /// Decoded off this actor: it is file IO and a decode, at the moment the call is connecting.
-    private func installCallSounds() async {
-        let renderer = await Task.detached(priority: .utility) { CallSoundRenderer.bundled() }.value
+    private func installSoundEffects() async {
+        let renderer = await Task.detached(priority: .utility) { CallSoundEffectRenderer.bundled() }.value
         guard let renderer, !Task.isCancelled else { return }
-        soundRenderer = renderer
+        soundEffectRenderer = renderer
         audioEngine.setSoundEffectSource(render: renderer.renderBlock)
     }
     
     /// One line per announced change, played or not, so a rageshake can show how often a membership
     /// lapses and returns (024's open question).
-    private func playCallSound(_ sound: CallSound, for memberID: String, participantCount: Int) {
-        let plays = soundPolicy.shouldPlay(sound, participantCount: participantCount, at: elapsed())
+    private func playJoinLeaveSound(_ sound: CallSoundEffect, for memberID: String, participantCount: Int) {
+        let plays = joinLeaveSoundPolicy.shouldPlay(sound, participantCount: participantCount, at: elapsed())
         MatrixRTCLog.info("\(memberID) \(sound == .join ? "joined" : "left"), \(participantCount) in the call: \(plays ? "playing" : "silent")")
         if plays {
-            soundRenderer?.play(sound)
+            soundEffectRenderer?.play(sound)
         }
     }
     

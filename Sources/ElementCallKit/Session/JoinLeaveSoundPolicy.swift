@@ -5,18 +5,13 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-/// The two sounds a change in who is in the call can make.
-nonisolated enum CallSound: CaseIterable, Sendable {
-    case join, leave
-}
-
 /// Whether an announced join or leave makes a sound.
 ///
 /// Which changes are announced at all is the core's: nothing for the roster we arrive to, nothing
 /// while our own membership is missing, nothing after the call ended. What is left here is what the
 /// spec leaves to the platforms, so both can test it the same way: the participant cap, and the
 /// 500 ms throttle per kind.
-nonisolated struct CallSoundPolicy {
+nonisolated struct JoinLeaveSoundPolicy {
     /// Web's `THROTTLE_SOUND_EFFECT_MS`. Measured from the last sound of the same kind *starting*, so a
     /// burst plays once rather than being queued, and a join never holds back a leave.
     static let throttle: Duration = .milliseconds(500)
@@ -24,7 +19,7 @@ nonisolated struct CallSoundPolicy {
     /// Above this many participants after the change, nothing plays.
     var participantCap: Int
     
-    private var lastPlayed: [CallSound: Duration] = [:]
+    private var lastPlayed: [CallSoundEffect: Duration] = [:]
     private var isSilenced = false
     
     init(participantCap: Int) {
@@ -33,7 +28,7 @@ nonisolated struct CallSoundPolicy {
     
     /// `participantCount` is the core's count after the whole change, ourselves included; `now` is
     /// on the call's clock.
-    mutating func shouldPlay(_ sound: CallSound, participantCount: Int, at now: Duration) -> Bool {
+    mutating func shouldPlay(_ sound: CallSoundEffect, participantCount: Int, at now: Duration) -> Bool {
         guard !isSilenced, participantCount <= participantCap else { return false }
         if let last = lastPlayed[sound], now - last < Self.throttle {
             return false
