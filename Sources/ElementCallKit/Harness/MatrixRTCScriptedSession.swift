@@ -76,9 +76,9 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
         pending?.resume(returning: state.withLock { $0.roster })
     }
     
-    public func push(me hasVideo: Bool, isMicrophoneMuted: Bool) {
+    public func push(me hasVideo: Bool, isMicrophoneMuted: Bool, hasHandRaised: Bool = false) {
         let pending = state.withLock { state -> CheckedContinuation<FfiLocalState?, Never>? in
-            state.localState = Self.localState(memberID: localMemberID, hasVideo: hasVideo, isMicrophoneMuted: isMicrophoneMuted)
+            state.localState = Self.localState(memberID: localMemberID, hasVideo: hasVideo, isMicrophoneMuted: isMicrophoneMuted, hasHandRaised: hasHandRaised)
             guard let pending = state.pendingLocalState else {
                 state.hasUnreadLocalState = true
                 return nil
@@ -263,7 +263,7 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
                     reachable: true)
     }
     
-    private static func localState(memberID: String, hasVideo: Bool, isMicrophoneMuted: Bool) -> FfiLocalState {
+    private static func localState(memberID: String, hasVideo: Bool, isMicrophoneMuted: Bool, hasHandRaised: Bool = false) -> FfiLocalState {
         FfiLocalState(tile: FfiCallTile(memberId: memberID,
                                         kind: .person,
                                         userId: "@me:example.com",
@@ -272,7 +272,7 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
                                         hasVideo: hasVideo,
                                         microphoneMuted: isMicrophoneMuted,
                                         speaking: false,
-                                        handRaisedAtMs: nil,
+                                        handRaisedAtMs: hasHandRaised ? 1 : nil,
                                         reachable: true),
                       isScreenSharing: false)
     }
@@ -325,8 +325,8 @@ public final class MatrixRTCScenarioPlayer {
                 call.tiles.order.map(\.id) == tokens.map(\.tileID)
                     && Set(call.tiles.detail.keys) == Set(tokens.map(\.tileID)).intersection(self.detailOnly ?? Set(tokens.map(\.tileID)))
             }
-        case .me(let hasVideo, let isMicrophoneMuted):
-            session.push(me: hasVideo, isMicrophoneMuted: isMicrophoneMuted)
+        case .me(let hasVideo, let isMicrophoneMuted, let hasHandRaised):
+            session.push(me: hasVideo, isMicrophoneMuted: isMicrophoneMuted, hasHandRaised: hasHandRaised)
             await waitUntil { [call] in
                 call.ownTile?.hasVideo == hasVideo && call.ownTile?.isMicrophoneMuted == isMicrophoneMuted
             }

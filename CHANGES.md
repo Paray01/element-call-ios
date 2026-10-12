@@ -11,7 +11,9 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**`ElementCallActiveSpeakerGradient` is now `ElementCallBorderGradient.activeSpeaker`**, beside
+`.raisedHand`. A host theme that draws its own speaking ring can do the same for a raised hand by
+implementing `raisedHandBorder(in:)`; the default is design's.
 
 ## 0.1.0-rc.10 - 2026-10-08
 

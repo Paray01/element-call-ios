@@ -75,7 +75,7 @@ enum ElementCallSmallCallLayout {
     /// Whether the arrangement is one picture behind all the chrome: one other person (R4). The
     /// screen extends the stage under the side safe areas for it, which is why it asks here rather
     /// than reading the arrangement, which needs the stage's size first.
-    static func isFullBleed(_ tiles: [ElementCallTile]) -> Bool {
+    nonisolated static func isFullBleed(_ tiles: [ElementCallTile]) -> Bool {
         applies(to: tiles) && tiles.count { !$0.isLocal && !$0.isScreenShare } == 1
     }
     

@@ -8,8 +8,10 @@
 // `@testable` for `MatrixRTCCall`'s internal initialiser and the controller's `setPreviewState`.
 @testable import ElementCallHost
 @testable import ElementCallKit
+@testable import ElementCallUI
 import Foundation
 import MatrixRtc
+import SwiftUI
 import Testing
 
 /// The raised hand on our side of the core: requests go through, and a refusal reaches the caller
@@ -114,11 +116,108 @@ struct RaisedHandControlTests {
         #expect(!controller.isHandPending)
     }
     
+    /// The screen, end to end: the control goes to pending, and when the homeserver accepts the
+    /// raise it still shows the hand down, because our tile has not moved. Here it never will,
+    /// since nothing publishes one; on a call the core does, a moment later. Showing the tap
+    /// instead would tell the user their hand is up before anyone can see it (009 R5).
+    @Test
+    func theControlShowsTheTileNotTheTap() async throws {
+        let (controller, rtcCall) = makeController()
+        let viewModel = ElementCallScreenViewModel(controller: controller)
+        // The first refresh runs from the observation task, after construction.
+        _ = try await deferFulfillment(values { viewModel.context.viewState.isHandRaiseAvailable }) { $0 }.fulfill()
+        let pending = deferFulfillment(values { viewModel.context.viewState.isHandPending }) { $0 }
+        
+        viewModel.context.send(viewAction: .toggleRaisedHand)
+        
+        _ = try await pending.fulfill()
+        #expect(!viewModel.context.viewState.isHandRaised)
+        let settled = deferFulfillment(values { viewModel.context.viewState.isHandPending }) { !$0 }
+        try await waitForPendingRequest(on: rtcCall)
+        rtcCall.answer()
+        _ = try await settled.fulfill()
+        #expect(!viewModel.context.viewState.isHandRaised)
+    }
+    
+    @Test
+    func theHarnessRaisesOurOwnTile() {
+        let context = ElementCallScreenContext.harness(state: ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group))
+        
+        context.send(viewAction: .toggleRaisedHand)
+        
+        #expect(context.viewState.isHandRaised)
+        #expect(context.viewState.tiles.filter(\.hasHandRaised).map(\.isLocal).contains(true))
+    }
+    
     private func waitUntilSettled(_ controller: ElementCallController) async throws {
         for _ in 0..<1000 where controller.isHandPending {
             try await Task.sleep(for: .milliseconds(5))
         }
         try #require(!controller.isHandPending)
+    }
+}
+
+/// Fewer than three people: no hand offered, unless ours is already up and has to come down (009 R2,
+/// R33); and one-to-one, no hand shown.
+@Suite("Raised hand in a small call")
+@MainActor
+struct SmallCallRaisedHandTests {
+    typealias Fixtures = ElementCallPreviewFixtures
+    
+    @Test
+    func theControlIsNotOfferedOneToOne() {
+        let state = Fixtures.connected(tiles: [Fixtures.alice, Fixtures.bob])
+        #expect(state.isOneToOne)
+        #expect(!state.showsRaiseHandControl)
+    }
+    
+    @Test
+    func theControlIsNotOfferedAlone() {
+        let state = Fixtures.connected(tiles: [Fixtures.alice])
+        #expect(!state.showsRaiseHandControl)
+    }
+    
+    /// A share is a second tile for the same person, so it does not make three people.
+    @Test
+    func aShareDoesNotCountAsAPerson() {
+        let state = Fixtures.connected(tiles: [Fixtures.alice, Fixtures.share("Frank"), Fixtures.tile("Frank", hasVideo: true)])
+        #expect(!state.showsRaiseHandControl)
+    }
+    
+    @Test
+    func aHandAlreadyUpCanStillBeLowered() {
+        var state = Fixtures.connected(tiles: [Fixtures.alice, Fixtures.bob])
+        state.isHandRaised = true
+        #expect(state.showsRaiseHandControl)
+    }
+    
+    @Test
+    func aThirdPersonBringsTheControlBack() {
+        let state = Fixtures.connected(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol])
+        #expect(!state.isOneToOne)
+        #expect(state.showsRaiseHandControl)
+    }
+    
+    @Test
+    func hidingAHandKeepsEverythingElse() {
+        let tile = Fixtures.tile("Erin", isSpeaking: true, hasHandRaised: true)
+        let hidden = tile.withHandHidden()
+        #expect(!hidden.hasHandRaised)
+        #expect(hidden.id == tile.id && hidden.isSpeaking)
+    }
+}
+
+/// Mic, camera, audio, the hand and hang-up are the bar a host ships with screen share off, which
+/// Element X does. The next control has to bring the `…` sheet with it rather than clip the bar on
+/// the smallest phone (009 R17).
+@Suite("Control bar length")
+@MainActor
+struct ControlBarLengthTests {
+    static let smallestPhoneShortSide: CGFloat = 375
+    
+    @Test(arguments: [Axis.horizontal, .vertical])
+    func theShippedBarFitsTheSmallestPhone(axis: Axis) {
+        #expect(ElementCallControlsView.length(controls: 5, along: axis) <= Self.smallestPhoneShortSide)
     }
 }
 

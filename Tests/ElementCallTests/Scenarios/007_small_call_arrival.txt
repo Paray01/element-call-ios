@@ -5,11 +5,19 @@
 0s     viewport 393x734 bottom 34
 0s                                   // alone: our tile floats bottom right (019 R3 as amended)
 1s     Bv
+1.5s   Bv^                         // one to one: B's hand is up and not shown (009 R33)
+1.8s   Bv
 2s     Bv Cv
 3s     Bv C!v                      // C speaks: below the threshold nobody moves (R7, R13)
 4s     Bv C!v D
-5s     Bv Cv D E                   // five tiles
+4.2s   Bv C!v D^                   // D raises a hand: below the threshold nobody moves (009 R10)
+4.4s   Bv C!v^ D^                  // C speaks with a hand up: the speaking border wins, the badge stays
+4.6s   me ^                        // ours too, on our own tile (009 R9)
+5s     Bv Cv D E                   // five tiles; B, C and D are down, ours stays up (009 R3)
 6s     Bv Cv D E F                 // six: the grid (R1)
+6.5s   D^ Bv Cv E F                // above the threshold the core ranks a hand first (002 R4)
+6.8s   Bv Cv D E F
+6.9s   me                          // ours down
 7s     Bv Cv D E                   // five again: small, by arrival (R33)
 8s     F#*v Bv Cv D                // a remote share: the grid (R8)
 9s     Bv Cv D                     // share over, F gone: small, B C D (R32)
