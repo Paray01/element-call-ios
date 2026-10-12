@@ -5,16 +5,8 @@ call implementation for iOS: media, session, user interface and the Matrix side,
 [matrix-rust-rtc](https://github.com/element-hq/matrix-rust-rtc).
 
 <p align="center">
-  <img src="screenshot.png" width="320" alt="A group call: one member spotlighted with a speaking outline, four more in a strip below, and the control bar.">
+  <img src="hero.gif" width="320" alt="A group call: one member spotlighted with a speaking outline, four more in a strip below, and the control bar.">
 </p>
-
-**This is not the web app, and not the embedded widget.** Three things share the Element Call name:
-
-| Repository | What it is |
-| --- | --- |
-| [`element-call`](https://github.com/element-hq/element-call) | the Element Call web application |
-| [`element-call-swift`](https://github.com/element-hq/element-call-swift) | that web application packaged for embedding in a web view |
-| `element-call-ios` (this one) | a native iOS implementation, no web view involved |
 
 ## A note on how this was built
 
