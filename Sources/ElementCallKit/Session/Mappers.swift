@@ -160,10 +160,10 @@ nonisolated extension MatrixRTCFrameEncryptionState {
 nonisolated extension MatrixRTCCallEvent {
     init(_ event: FfiCallEvent) {
         switch event {
-        case .participantJoined(let memberId, let userId):
-            self = .participantJoined(memberID: memberId, userID: userId)
-        case .participantLeft(let memberId):
-            self = .participantLeft(memberID: memberId)
+        case .participantJoined(let memberId, let userId, let participantCount):
+            self = .participantJoined(memberID: memberId, userID: userId, participantCount: Int(participantCount))
+        case .participantLeft(let memberId, let participantCount):
+            self = .participantLeft(memberID: memberId, participantCount: Int(participantCount))
         case .streamStarted(let memberId, let kind):
             self = .streamStarted(memberID: memberId, kind: .init(kind))
         case .streamStopped(let memberId, let kind):

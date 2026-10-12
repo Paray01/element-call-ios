@@ -352,8 +352,11 @@ public nonisolated enum MatrixRTCEndReason: Sendable, Hashable {
 }
 
 public nonisolated enum MatrixRTCCallEvent: Sendable, Hashable {
-    case participantJoined(memberID: String, userID: String)
-    case participantLeft(memberID: String)
+    /// Someone joined while we were in the call: one per device, never the members already there
+    /// when we arrived. `participantCount` is the call's size after the change, ourselves included.
+    case participantJoined(memberID: String, userID: String, participantCount: Int)
+    /// Someone left while we were in the call; never as the call ends for us.
+    case participantLeft(memberID: String, participantCount: Int)
     case streamStarted(memberID: String, kind: MatrixRTCStreamKind)
     case streamStopped(memberID: String, kind: MatrixRTCStreamKind)
     case streamMuted(memberID: String, kind: MatrixRTCStreamKind)

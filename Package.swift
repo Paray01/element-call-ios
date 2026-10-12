@@ -17,7 +17,7 @@ let package = Package(
         .library(name: "ElementCallMatrix", targets: ["ElementCallMatrix"])
     ],
     dependencies: [
-        .package(url: "https://github.com/element-hq/matrix-rust-rtc", exact: "0.5.0-rc.2"),
+        .package(url: "https://github.com/element-hq/matrix-rust-rtc", exact: "0.5.0-rc.3"),
         // .package(path: "../matrix-rust-rtc"),
         // The design *tokens*, not the Compound component library. Tokens are static values in
         // their own small package, so depending on them is safe. Compound itself is not, because its
@@ -47,6 +47,9 @@ let package = Package(
     targets: [
         .target(name: "ElementCallKit",
                 dependencies: [.product(name: "MatrixRtc", package: "matrix-rust-rtc")],
+                // Copied rather than processed: the files are Element Call web's, byte for byte, and
+                // Sounds/README.md pins them by hash.
+                resources: [.copy("Sounds")],
                 swiftSettings: [.defaultIsolation(MainActor.self)]),
         .target(name: "ElementCallHost",
                 dependencies: ["ElementCallKit",
