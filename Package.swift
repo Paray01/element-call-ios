@@ -47,6 +47,9 @@ let package = Package(
     targets: [
         .target(name: "ElementCallKit",
                 dependencies: [.product(name: "MatrixRtc", package: "matrix-rust-rtc")],
+                // Copied rather than processed: the files are Element Call web's, byte for byte, and
+                // Sounds/README.md pins them by hash.
+                resources: [.copy("Sounds")],
                 swiftSettings: [.defaultIsolation(MainActor.self)]),
         .target(name: "ElementCallHost",
                 dependencies: ["ElementCallKit",

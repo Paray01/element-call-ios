@@ -153,6 +153,23 @@ public final class MatrixRTCMediaSession {
     private var pausedVideoStreams = Set<MatrixRTCTileID>()
     private var tasks = [Task<Void, Never>]()
     
+    /// Spec 024's default: no join or leave sound once more than this many are in the call.
+    public nonisolated static let defaultParticipantCapForSounds = 8
+    
+    /// Above this many people in the call, ourselves included, joins and leaves are silent. A host
+    /// setting, applied by whoever connected the call.
+    public var participantCapForSounds: Int {
+        get { soundPolicy.participantCap }
+        set { soundPolicy.participantCap = newValue }
+    }
+    
+    /// The join and leave sounds. The renderer arrives once the bundled files are decoded, off this
+    /// actor; until then an announced change plays nothing.
+    @ObservationIgnored private var soundPolicy: CallSoundPolicy
+    @ObservationIgnored private var soundRenderer: CallSoundRenderer?
+    /// Time on ``clock`` since the session was made: what the sound throttle measures against.
+    @ObservationIgnored private let elapsed: () -> Duration
+    
     /// Size and frame rate of the streams being drawn (or captured), refreshed about once a second.
     private var videoInfos = [MatrixRTCStreamRef: MatrixRTCVideoInfo]()
     
@@ -188,6 +205,8 @@ public final class MatrixRTCMediaSession {
         self.mediaSession = mediaSession
         self.clock = clock
         self.capturesCamera = capturesCamera
+        soundPolicy = CallSoundPolicy(participantCap: Self.defaultParticipantCapForSounds)
+        elapsed = Self.stopwatch(clock)
         (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
     }
     
@@ -204,6 +223,7 @@ public final class MatrixRTCMediaSession {
         tasks.append(Task { [weak self] in await self?.pumpTileRoster() })
         tasks.append(Task { [weak self] in await self?.pumpLocalState() })
         tasks.append(Task { [weak self] in await self?.pollReceiveStats() })
+        tasks.append(Task { [weak self] in await self?.installCallSounds() })
         seedParticipants()
         apply(mediaSession.roster())
         apply(mediaSession.localState())
@@ -754,6 +774,8 @@ public final class MatrixRTCMediaSession {
     // MARK: - Teardown
     
     public func disconnect() async {
+        // First: everything below tears the call down, and none of it may sound like people leaving.
+        soundPolicy.silence()
         pendingReleases.values.forEach { $0.cancel() }
         pendingReleases.removeAll()
         tasks.forEach { $0.cancel() }
@@ -849,14 +871,45 @@ public final class MatrixRTCMediaSession {
             MatrixRTCLog.info("Key index \(keyIndex) imported for \(memberID)")
         case .mediaConnectionDegraded(let degraded):
             isMediaDegraded = degraded
+        case .participantJoined(let memberID, _, let participantCount):
+            playCallSound(.join, for: memberID, participantCount: participantCount)
+        case .participantLeft(let memberID, let participantCount):
+            playCallSound(.leave, for: memberID, participantCount: participantCount)
         case .ended(let reason):
             MatrixRTCLog.info("Media session ended: \(reason)")
+            soundPolicy.silence()
             hasEnded = true
             playbackSinks.values.forEach { $0.stop() }
             playbackSinks.removeAll()
         default:
             break
         }
+    }
+    
+    // MARK: - Join and leave sounds
+    
+    /// Decoded off this actor: it is file IO and a decode, at the moment the call is connecting.
+    private func installCallSounds() async {
+        let renderer = await Task.detached(priority: .utility) { CallSoundRenderer.bundled() }.value
+        guard let renderer, !Task.isCancelled else { return }
+        soundRenderer = renderer
+        audioEngine.setSoundEffectSource(render: renderer.renderBlock)
+    }
+    
+    /// One line per announced change, played or not, so a rageshake can show how often a membership
+    /// lapses and returns (024's open question).
+    private func playCallSound(_ sound: CallSound, for memberID: String, participantCount: Int) {
+        let plays = soundPolicy.shouldPlay(sound, participantCount: participantCount, at: elapsed())
+        MatrixRTCLog.info("\(memberID) \(sound == .join ? "joined" : "left"), \(participantCount) in the call: \(plays ? "playing" : "silent")")
+        if plays {
+            soundRenderer?.play(sound)
+        }
+    }
+    
+    /// Opens the existential so its instant can be kept: `any Clock` has no `now` to subtract.
+    private static func stopwatch(_ clock: some Clock<Duration>) -> () -> Duration {
+        let start = clock.now
+        return { start.duration(to: clock.now) }
     }
     
     /// Reached from the roster only; the dictionary claim keeps a member from being played twice.

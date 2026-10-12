@@ -53,17 +53,23 @@ public nonisolated struct ElementCallOptions: Sendable {
     /// default is false because CallKit's island already represents a backgrounded audio call, and
     /// a window appearing on every app switch is intrusive when there is only an avatar to show.
     public var isAutomaticPictureInPictureForAudioCallsEnabled: Bool
+    /// Above this many people in the call, counting ourselves, nobody joining or leaving plays a
+    /// sound. Read when media connects. Not a user setting: it is how big a call has to be before
+    /// arrivals stop being news, and both platforms default to the same number.
+    public var participantCapForSounds: Int
     
     public init(isPictureInPictureEnabled: Bool = true,
                 membershipFormat: MatrixRTCMembershipFormat = .roomState,
                 isDeveloperModeEnabled: Bool = false,
                 isScreenSharingEnabled: Bool = false,
-                isAutomaticPictureInPictureForAudioCallsEnabled: Bool = false) {
+                isAutomaticPictureInPictureForAudioCallsEnabled: Bool = false,
+                participantCapForSounds: Int = MatrixRTCMediaSession.defaultParticipantCapForSounds) {
         self.isPictureInPictureEnabled = isPictureInPictureEnabled
         self.membershipFormat = membershipFormat
         self.isDeveloperModeEnabled = isDeveloperModeEnabled
         self.isScreenSharingEnabled = isScreenSharingEnabled
         self.isAutomaticPictureInPictureForAudioCallsEnabled = isAutomaticPictureInPictureForAudioCallsEnabled
+        self.participantCapForSounds = participantCapForSounds
     }
 }
 
