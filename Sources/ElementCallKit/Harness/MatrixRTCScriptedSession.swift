@@ -260,6 +260,7 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
                     microphoneMuted: token.isMicrophoneMuted,
                     speaking: token.isSpeaking,
                     handRaisedAtMs: token.hasHandRaised ? 1 : nil,
+                    handRaisedPosition: nil,
                     reachable: true)
     }
     
@@ -273,6 +274,7 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
                                         microphoneMuted: isMicrophoneMuted,
                                         speaking: false,
                                         handRaisedAtMs: hasHandRaised ? 1 : nil,
+                                        handRaisedPosition: nil,
                                         reachable: true),
                       isScreenSharing: false)
     }
