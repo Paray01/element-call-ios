@@ -50,31 +50,52 @@ public nonisolated protocol ElementCallThemeProtocol: Sendable {
     /// the colours depends on the tile's proportions: computed once for the screen, a narrow tile
     /// would show only the middle of the sweep. Return a single colour for a plain ring.
     @MainActor func activeSpeakerBorder(in size: CGSize) -> [AnyShapeStyle]
+    
+    /// The ring round a tile whose member has a hand up, the same way.
+    @MainActor func raisedHandBorder(in size: CGSize) -> [AnyShapeStyle]
 }
 
 public extension ElementCallThemeProtocol {
-    /// The design's gradient, so a host theme written before this existed keeps compiling and gets
-    /// the designed ring rather than none.
+    /// The design's gradients, so a host theme written before these existed keeps compiling and
+    /// gets the designed rings rather than none.
     @MainActor func activeSpeakerBorder(in size: CGSize) -> [AnyShapeStyle] {
-        ElementCallActiveSpeakerGradient.layers(in: size)
+        ElementCallBorderGradient.activeSpeaker.layers(in: size)
+    }
+    
+    @MainActor func raisedHandBorder(in size: CGSize) -> [AnyShapeStyle] {
+        ElementCallBorderGradient.raisedHand.layers(in: size)
     }
 }
 
-/// The design's speaking ring: a vertical blue to teal gradient over a diagonal one, as the Figma's
-/// CSS layers them. Literal colours because Compound has no token for either; Android's
-/// `ActiveSpeakerBrush` uses the same two.
-public nonisolated enum ElementCallActiveSpeakerGradient {
-    private static let blue = Color(red: 13 / 255, green: 92 / 255, blue: 189 / 255)
-    private static let teal = Color(red: 13 / 255, green: 189 / 255, blue: 168 / 255)
+/// The design's tile rings: a vertical gradient over a diagonal one between the same two colours,
+/// as the Figma's CSS layers them, the diagonal at 0.7 and the vertical at 0.9. Literal colours
+/// because Compound has no token for any of them; Android's `ActiveSpeakerBrush` uses the same
+/// speaking pair.
+public nonisolated struct ElementCallBorderGradient: Sendable {
+    /// Blue to teal.
+    public static let activeSpeaker = ElementCallBorderGradient(top: Color(red: 13 / 255, green: 92 / 255, blue: 189 / 255),
+                                                                bottom: Color(red: 13 / 255, green: 189 / 255, blue: 168 / 255))
+    /// Orange to yellow.
+    public static let raisedHand = ElementCallBorderGradient(top: Color(red: 220 / 255, green: 103 / 255, blue: 0),
+                                                             bottom: Color(red: 241 / 255, green: 189 / 255, blue: 0))
+    
     private static let diagonalCSSDegrees = 119.36
     
-    public static func layers(in size: CGSize) -> [AnyShapeStyle] {
-        let diagonal = diagonalEnds(in: size)
+    public let top: Color
+    public let bottom: Color
+    
+    public init(top: Color, bottom: Color) {
+        self.top = top
+        self.bottom = bottom
+    }
+    
+    public func layers(in size: CGSize) -> [AnyShapeStyle] {
+        let diagonal = Self.diagonalEnds(in: size)
         return [
-            AnyShapeStyle(LinearGradient(colors: [blue.opacity(0.7), teal.opacity(0.7)],
+            AnyShapeStyle(LinearGradient(colors: [top.opacity(0.7), bottom.opacity(0.7)],
                                          startPoint: diagonal.start,
                                          endPoint: diagonal.end)),
-            AnyShapeStyle(LinearGradient(colors: [blue.opacity(0.9), teal.opacity(0.9)],
+            AnyShapeStyle(LinearGradient(colors: [top.opacity(0.9), bottom.opacity(0.9)],
                                          startPoint: .top,
                                          endPoint: .bottom))
         ]

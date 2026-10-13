@@ -29,7 +29,19 @@ struct ElementCallControlsView: View {
     /// which overflows the 375 pt short side of a phone and clipped the mic and the hang-up button
     /// off both ends. Landscape has width to spare and no height at all.
     private var layout: AnyLayout {
-        axis == .horizontal ? AnyLayout(HStackLayout(spacing: 12)) : AnyLayout(VStackLayout(spacing: 8))
+        let spacing = Self.spacing(along: axis)
+        return axis == .horizontal ? AnyLayout(HStackLayout(spacing: spacing)) : AnyLayout(VStackLayout(spacing: spacing))
+    }
+    
+    static func spacing(along axis: Axis) -> CGFloat {
+        axis == .horizontal ? 12 : 8
+    }
+    
+    /// End to end, capsule included. The design's answer to a bar that does not fit is a `…`
+    /// control opening a sheet of what overflowed, which is not built yet, so a test holds this to
+    /// what a phone can take instead (009 R17).
+    static func length(controls count: Int, along axis: Axis) -> CGFloat {
+        CGFloat(count) * 56 + CGFloat(count - 1) * spacing(along: axis) + 2 * 8
     }
     
     var body: some View {
@@ -45,6 +57,9 @@ struct ElementCallControlsView: View {
                 context.send(viewAction: .toggleCamera)
             }
             audioRouteButton
+            if context.viewState.showsRaiseHandControl {
+                raisedHandButton
+            }
             if context.viewState.isScreenSharingEnabled {
                 controlButton(icon: .shareScreen,
                               isActive: !context.viewState.isScreenSharing,
@@ -104,6 +119,29 @@ struct ElementCallControlsView: View {
             }
             .accessibilityValue(audioOutputValue)
         }
+    }
+    
+    /// Shows our hand as the others see it, and progress while a change is with the homeserver
+    /// rather than the tap's result (009 R5). Disabled meanwhile, so a second tap cannot send twice.
+    private var raisedHandButton: some View {
+        let state = context.viewState
+        return Button {
+            context.send(viewAction: .toggleRaisedHand)
+        } label: {
+            if state.isHandPending {
+                ProgressView()
+                    .tint(state.isHandRaised ? style.theme.iconOnSolidPrimary : style.theme.iconPrimary)
+                    .frame(width: 56, height: 56)
+                    .background(state.isHandRaised ? style.theme.bgActionPrimaryRest : style.theme.bgSubtleSecondary, in: Circle())
+            } else {
+                controlCircle(icon: .raisedHand, isActive: !state.isHandRaised)
+            }
+        }
+        .disabled(state.isHandPending)
+        .accessibilityLabel(state.isHandRaised ? "Lower hand" : "Raise hand")
+        .accessibilityValue(state.isHandPending ? "Updating" : state.isHandRaised ? "Raised" : "")
+        // The same identifier `controlButton` would derive, set here because this one is built by hand.
+        .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.control(for: .raisedHand))
     }
     
     /// The earpiece is the resting state; anything else, speaker, headset or car, is highlighted,
@@ -204,6 +242,13 @@ struct ElementCallControlsView_Previews: PreviewProvider, TestablePreview {
             .environment(\.colorScheme, .dark)
     }
     
+    static func handState(isRaised: Bool, isPending: Bool) -> ElementCallScreenViewState {
+        var state = ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group)
+        state.isHandRaised = isRaised
+        state.isHandPending = isPending
+        return state
+    }
+    
     static var previews: some View {
         controls(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group))
             .previewDisplayName("Resting")
@@ -216,5 +261,11 @@ struct ElementCallControlsView_Previews: PreviewProvider, TestablePreview {
         controls(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group,
                                                       audioOutputs: ElementCallPreviewFixtures.headsetAudioOutputs))
             .previewDisplayName("Headset")
+        controls(handState(isRaised: true, isPending: false))
+            .previewDisplayName("Hand raised")
+        controls(handState(isRaised: false, isPending: true))
+            .previewDisplayName("Hand going up")
+        controls(handState(isRaised: true, isPending: true))
+            .previewDisplayName("Hand coming down")
     }
 }

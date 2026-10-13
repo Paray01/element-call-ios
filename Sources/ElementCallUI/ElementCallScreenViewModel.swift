@@ -129,6 +129,12 @@ public final class ElementCallScreenContext {
                 context.viewState.audioOutput = state.isLoudspeaker ? state.audioOutputs.first { $0.kind != .speaker } ?? .receiver : .speaker
             case let .selectAudioOutput(output):
                 context.viewState.audioOutput = output
+            case .toggleRaisedHand:
+                let isRaised = !context.viewState.isHandRaised
+                context.viewState.isHandRaised = isRaised
+                // Queued after every remote hand, as the harness numbers hands (009 C7).
+                let position = isRaised ? 1 + context.viewState.tiles.count { !$0.isLocal && $0.hasHandRaised } : nil
+                context.viewState.tiles = ElementCallScreenViewState.showingHands(context.viewState.tiles.map { $0.withHandPosition(position) })
             case .minimize, .hangUp, .dismiss:
                 onHostAction?(action)
             }
@@ -247,6 +253,8 @@ public final class ElementCallScreenViewModel {
             controller.setLoudspeaker(!controller.isLoudspeaker)
         case let .selectAudioOutput(output):
             controller.selectAudioOutput(output)
+        case .toggleRaisedHand:
+            controller.setHandRaised(!controller.isHandRaised)
         case .toggleTileStats:
             controller.toggleTileStats()
         case .minimize:
@@ -290,6 +298,10 @@ public final class ElementCallScreenViewModel {
         // a call, and without them a mute tapped while joining draws itself back unmuted.
         state.isMicrophoneMuted = controller.isMicrophoneMuted
         state.isCameraEnabled = controller.isCameraEnabled
+        // The membership comes before media, so the hand is offered from the join on.
+        state.isHandRaiseAvailable = controller.rtcCall != nil
+        state.isHandPending = controller.isHandPending
+        state.isHandRaised = controller.isHandRaised
         
         if let message = controller.errorMessage {
             context.alertInfo = ElementCallAlert(title: context.style.strings.error, message: message)
@@ -335,6 +347,9 @@ public final class ElementCallScreenViewModel {
                                  // `receiveStats` is rewritten every second whether anyone is looking
                                  // or not, so tracking it cost a full screen rebuild per second.
                                  stats: controller.isTileStatsVisible ? { Self.stats(for: $0, in: call) } : { _ in nil })
+        // Here rather than in the tile, which cannot tell a one-to-one call's floating tile from a
+        // small call's, and which would miss the full-screen badge drawn by the screen (009 R33).
+        state.tiles = ElementCallScreenViewState.showingHands(state.tiles)
         
         let spotlight = ElementCallSpotlight.choose(tiles: state.tiles,
                                                     shownHeroID: context.shownHeroID,
@@ -413,7 +428,7 @@ public final class ElementCallScreenViewModel {
                                    isMicrophoneMuted: false,
                                    hasVideo: false,
                                    isSpeaking: false,
-                                   hasHandRaised: false,
+                                   handPosition: nil,
                                    isHero: ref.isHero,
                                    stats: nil)
         }
@@ -427,7 +442,7 @@ public final class ElementCallScreenViewModel {
                                    isMicrophoneMuted: tile.isMicrophoneMuted,
                                    hasVideo: tile.hasVideo,
                                    isSpeaking: tile.isSpeaking,
-                                   hasHandRaised: tile.handRaisedAt != nil,
+                                   handPosition: tile.handRaisedPosition,
                                    // Ours is never a hero even if something upstream said so: it is
                                    // not in the ranking, so nothing can rank it.
                                    isHero: tile.isLocal ? false : tile.isHero,

@@ -80,7 +80,7 @@ nonisolated struct JoinLeaveSoundPolicyTests {
         // R7: teardown never sounds like people leaving.
         var policy = JoinLeaveSoundPolicy(participantCap: 8)
         policy.silence()
-        let played = CallSoundEffect.allCases.map { policy.shouldPlay($0, participantCount: 2, at: ms(10000)) }
+        let played = [CallSoundEffect.join, .leave].map { policy.shouldPlay($0, participantCount: 2, at: ms(10000)) }
         #expect(played == [false, false])
     }
 }

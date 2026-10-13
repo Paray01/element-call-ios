@@ -69,6 +69,12 @@ struct ElementCallView: View {
                     }
                     
                     if let fullscreenTile {
+                        // Outside the chrome, which starts hidden: a hand is the person's state, not
+                        // a control, so it shows whether or not the chrome does (009 R30).
+                        if let position = fullscreenTile.handPosition, !fullscreenTile.isScreenShare {
+                            ElementCallFullscreenHandBadge(position: position)
+                                .zIndex(2)
+                        }
                         if context.isFullscreenChromeVisible {
                             ElementCallFullscreenChrome(tile: fullscreenTile,
                                                         context: context,

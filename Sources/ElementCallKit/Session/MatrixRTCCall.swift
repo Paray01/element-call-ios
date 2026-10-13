@@ -29,11 +29,13 @@ public final class MatrixRTCCall {
     
     public private(set) var mediaSession: MatrixRTCMediaSession?
     
-    @ObservationIgnored private let rtcCall: RtcCall
+    /// The protocol rather than the class so a test can stand in for the membership; only
+    /// ``connectMedia()`` needs the core's own call, and says so.
+    @ObservationIgnored private let rtcCall: any RtcCallProtocol
     @ObservationIgnored private var hasLeft = false
     @ObservationIgnored private var membershipReader: Task<Void, Never>?
     
-    init(rtcCall: RtcCall) {
+    init(rtcCall: any RtcCallProtocol) {
         self.rtcCall = rtcCall
         roomID = rtcCall.roomId()
         slotID = rtcCall.slotId()
@@ -63,6 +65,9 @@ public final class MatrixRTCCall {
     public func connectMedia() async throws -> MatrixRTCMediaSession {
         if let mediaSession {
             return mediaSession
+        }
+        guard let rtcCall = rtcCall as? RtcCall else {
+            throw MatrixRTCError.media("\(roomID)/\(slotID) is not a core call and has no media")
         }
         let ffiSession: MediaSession
         do {
@@ -96,6 +101,35 @@ public final class MatrixRTCCall {
             MatrixRTCLog.info("Left \(roomID)/\(slotID)")
         } catch {
             MatrixRTCLog.warning("Failed to leave \(roomID)/\(slotID): \(error)")
+        }
+    }
+    
+    // MARK: - Raised hand
+    
+    /// Returns once the homeserver has the annotation, and the core has recorded our hand as up. The
+    /// tiles carry it a moment later, through the same raised-hand set as everyone else's, which is
+    /// what the control shows: never this call's success, which is not yet what others see.
+    ///
+    /// A no-op while the hand is up. The core keeps it on our membership across sticky refreshes,
+    /// so nothing here re-raises it.
+    public func raiseHand() async throws {
+        do {
+            try await rtcCall.raiseHand()
+            MatrixRTCLog.info("Hand raised in \(roomID)/\(slotID)")
+        } catch {
+            MatrixRTCLog.warning("Failed to raise hand in \(roomID)/\(slotID): \(error)")
+            throw MatrixRTCError.ffi("\(error)")
+        }
+    }
+    
+    /// Redacts the annotation. A no-op while the hand is down.
+    public func lowerHand() async throws {
+        do {
+            try await rtcCall.lowerHand()
+            MatrixRTCLog.info("Hand lowered in \(roomID)/\(slotID)")
+        } catch {
+            MatrixRTCLog.warning("Failed to lower hand in \(roomID)/\(slotID): \(error)")
+            throw MatrixRTCError.ffi("\(error)")
         }
     }
     

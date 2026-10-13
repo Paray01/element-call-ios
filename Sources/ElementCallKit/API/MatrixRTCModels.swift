@@ -213,6 +213,10 @@ public nonisolated struct MatrixRTCTile: Sendable, Hashable, Identifiable {
     public let isMicrophoneMuted: Bool
     public let isSpeaking: Bool
     public let handRaisedAt: Date?
+    /// The hand's place in the queue, 1 for the earliest still up, counted by the core over everyone
+    /// in the call rather than over the tiles in the window, so every client shows the same number
+    /// (009 R6). Never recomputed from ``handRaisedAt``.
+    public let handRaisedPosition: Int?
     public let isReachable: Bool
     
     public var memberID: String {
@@ -236,6 +240,7 @@ public nonisolated struct MatrixRTCTile: Sendable, Hashable, Identifiable {
                 isMicrophoneMuted: Bool = false,
                 isSpeaking: Bool = false,
                 handRaisedAt: Date? = nil,
+                handRaisedPosition: Int? = nil,
                 isReachable: Bool = true) {
         self.id = id
         self.userID = userID
@@ -246,6 +251,7 @@ public nonisolated struct MatrixRTCTile: Sendable, Hashable, Identifiable {
         self.isMicrophoneMuted = isMicrophoneMuted
         self.isSpeaking = isSpeaking
         self.handRaisedAt = handRaisedAt
+        self.handRaisedPosition = handRaisedPosition
         self.isReachable = isReachable
     }
 }

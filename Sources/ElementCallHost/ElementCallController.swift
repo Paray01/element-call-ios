@@ -352,6 +352,39 @@ public final class ElementCallController {
         }
     }
     
+    // MARK: - Raised hand
+    
+    /// While a raise or a lower is with the homeserver. The control shows progress and takes no
+    /// taps: not the new state, which nobody else can see yet (009 R5), and not the old one looking
+    /// tappable, which invites a second send.
+    public private(set) var isHandPending = false
+    
+    /// Read from our tile, which the core changes only once the homeserver has the annotation, so
+    /// the control shows what everyone else sees rather than the last tap. A refusal therefore
+    /// needs no undoing: the tile never moved (009 R22).
+    public var isHandRaised: Bool {
+        call?.ownTile?.handRaisedAt != nil
+    }
+    
+    /// A no-op before the join, which has no membership to put a hand on.
+    public func setHandRaised(_ raised: Bool) {
+        guard let rtcCall, !isHandPending else { return }
+        isHandPending = true
+        Task {
+            defer { isHandPending = false }
+            do {
+                if raised {
+                    try await rtcCall.raiseHand()
+                } else {
+                    try await rtcCall.lowerHand()
+                }
+            } catch {
+                log(.warning, "could not \(raised ? "raise" : "lower") the hand: \(error)")
+                errorMessage = raised ? "Your hand could not be raised." : "Your hand could not be lowered."
+            }
+        }
+    }
+    
     private func bindPictureInPictureIfEnabled(_ call: MatrixRTCMediaSession) {
         guard options.isPictureInPictureEnabled, !pictureInPicture.isBound else { return }
         pictureInPicture.automaticStartIncludesAudioCalls = options.isAutomaticPictureInPictureForAudioCallsEnabled
@@ -683,12 +716,14 @@ public final class ElementCallController {
                          room: any ElementCallRoomContextProtocol,
                          connection: ElementCallConnection,
                          connectedAt: Date? = nil,
-                         call: MatrixRTCMediaSession? = nil) {
+                         call: MatrixRTCMediaSession? = nil,
+                         rtcCall: MatrixRTCCall? = nil) {
         self.callData = callData
         self.room = room
         self.connection = connection
         self.connectedAt = connectedAt
         self.call = call
+        self.rtcCall = rtcCall
         // The same seed `startCall` makes, so a preview of a connecting call draws the controls a
         // real one would: the camera reads as on for a video call from the moment it is joining,
         // which is what it will join with.

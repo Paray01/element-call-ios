@@ -95,12 +95,21 @@ final class ScenarioStage {
             // The view model refreshes on the roster the player already delivered; the stage
             // sees the tiles once it has.
             let expected = [player.call.ownTile?.id].compactMap { $0 } + tokens.map(\.tileID)
-            try await waitUntil("tiles \(tokens.map(\.name))") { [self] in context.viewState.tiles.map(\.id) == expected }
+            // Hands as well as identities: a frame that only raises one keeps every id, and would
+            // otherwise be dumped before the screen had it. Shown hands, so none one-to-one (009 R33).
+            let hands = Dictionary(uniqueKeysWithValues: tokens.map { ($0.tileID, $0.hasHandRaised) })
+            try await waitUntil("tiles \(tokens.map(\.name))") { [self] in
+                let state = context.viewState
+                return state.tiles.map(\.id) == expected && state.tiles.allSatisfy { tile in
+                    tile.isLocal || tile.hasHandRaised == (!state.isOneToOne && hands[tile.id] == true)
+                }
+            }
             // A departure that shortens the grid past the offset: the stage settles to the new end.
             clampOffset()
-        case .me(let hasVideo, let isMicrophoneMuted):
+        case .me(let hasVideo, let isMicrophoneMuted, let hasHandRaised):
             try await waitUntil("me") { [self] in
                 context.viewState.tiles.first?.hasVideo == hasVideo && context.viewState.tiles.first?.isMicrophoneMuted == isMicrophoneMuted
+                    && context.viewState.isHandRaised == hasHandRaised
             }
         case .viewport(let size, let top, let bottom):
             metrics = Self.metrics(for: .viewport(size: size, topInset: top, bottomInset: bottom))

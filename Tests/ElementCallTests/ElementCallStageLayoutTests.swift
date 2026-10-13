@@ -61,7 +61,7 @@ struct ElementCallStageLayoutTests {
                         isMicrophoneMuted: false,
                         hasVideo: kind == .screenShare,
                         isSpeaking: false,
-                        hasHandRaised: false,
+                        handPosition: nil,
                         isHero: isHero,
                         stats: nil)
     }
