@@ -79,10 +79,12 @@ struct ElementCallFullscreenChrome: View {
 /// A full-screen tile's raised hand, drawn by the screen for the reason the chrome is, and below
 /// the chrome's top row so the two never overlap and the badge does not move when a tap raises it.
 struct ElementCallFullscreenHandBadge: View {
+    let position: Int
+    
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                ElementCallRaisedHandBadge()
+                ElementCallRaisedHandBadge(position: position)
                 Spacer()
             }
             .padding(.horizontal, 16)
@@ -135,8 +137,8 @@ struct ElementCallFullscreenChrome_Previews: PreviewProvider, TestablePreview {
         chrome(Fixtures.bob)
             .previewDisplayName("Muted remote")
         ZStack {
-            chrome(Fixtures.tile("Erin", hasHandRaised: true))
-            ElementCallFullscreenHandBadge()
+            chrome(Fixtures.tile("Erin", handPosition: 2))
+            ElementCallFullscreenHandBadge(position: 2)
         }
         .environment(\.colorScheme, .dark)
         .previewDisplayName("Hand raised")

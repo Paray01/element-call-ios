@@ -149,7 +149,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
             // so the one thing that can prove a tap still reaches a button rather than the gesture
             // wrapped around it. Bob's camera is on too, so his tile draws the pattern. His hand is
             // up and must not show: a one-to-one call draws no hands (009 R33).
-            return Self.connected([Fixtures.tile("Alice", isLocal: true, hasVideo: true), Fixtures.tile("Bob", hasVideo: true, hasHandRaised: true)],
+            return Self.connected([Fixtures.tile("Alice", isLocal: true, hasVideo: true), Fixtures.tile("Bob", hasVideo: true, handPosition: 1)],
                                   isDirect: true)
         case .group:
             return Self.connected(Fixtures.group)
@@ -158,7 +158,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
             // full screen from a scrolled grid and coming back to the same offset is the thing
             // worth checking. Carol's hand is up, so the spotlight shows it in her name pill (009 R6);
             // she is already first, where the core ranks a raised hand.
-            let group = Fixtures.group.map { $0.id == Fixtures.carol.id ? Fixtures.tile("Carol", isSpeaking: true, hasHandRaised: true) : $0 }
+            let group = Fixtures.group.map { $0.id == Fixtures.carol.id ? Fixtures.tile("Carol", isSpeaking: true, handPosition: 1) : $0 }
             return Self.connected(group + crowd)
         case .screenShare:
             // Frank on **two** tiles: his screen is the hero and takes the spotlight, and his camera
@@ -212,10 +212,10 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .smallFour:
             // Three hands, one of each kind (009 R6, R9): ours, Carol's under her speaking border,
             // and Dan's on his avatar.
-            return Self.connected([Fixtures.tile("Alice", isLocal: true, hasVideo: true, hasHandRaised: true),
-                                   Fixtures.tile("Carol", hasVideo: true, isSpeaking: true, hasHandRaised: true),
+            return Self.connected([Fixtures.tile("Alice", isLocal: true, hasVideo: true, handPosition: 3),
+                                   Fixtures.tile("Carol", hasVideo: true, isSpeaking: true, handPosition: 1),
                                    Fixtures.tile("Bob", hasVideo: true),
-                                   Fixtures.tile("Dan", hasHandRaised: true)])
+                                   Fixtures.tile("Dan", handPosition: 2)])
         case .smallFive:
             return Self.connected([me] + [("Carol", true), ("Bob", true), ("Dan", false), ("Erin", true)].map { Fixtures.tile($0, hasVideo: $1) })
         case .joining:

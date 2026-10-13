@@ -132,7 +132,9 @@ public final class ElementCallScreenContext {
             case .toggleRaisedHand:
                 let isRaised = !context.viewState.isHandRaised
                 context.viewState.isHandRaised = isRaised
-                context.viewState.tiles = ElementCallScreenViewState.showingHands(context.viewState.tiles.map { $0.withHandRaised(isRaised) })
+                // Queued after every remote hand, as the harness numbers hands (009 C7).
+                let position = isRaised ? 1 + context.viewState.tiles.count { !$0.isLocal && $0.hasHandRaised } : nil
+                context.viewState.tiles = ElementCallScreenViewState.showingHands(context.viewState.tiles.map { $0.withHandPosition(position) })
             case .minimize, .hangUp, .dismiss:
                 onHostAction?(action)
             }
@@ -426,7 +428,7 @@ public final class ElementCallScreenViewModel {
                                    isMicrophoneMuted: false,
                                    hasVideo: false,
                                    isSpeaking: false,
-                                   hasHandRaised: false,
+                                   handPosition: nil,
                                    isHero: ref.isHero,
                                    stats: nil)
         }
@@ -440,7 +442,7 @@ public final class ElementCallScreenViewModel {
                                    isMicrophoneMuted: tile.isMicrophoneMuted,
                                    hasVideo: tile.hasVideo,
                                    isSpeaking: tile.isSpeaking,
-                                   hasHandRaised: tile.handRaisedAt != nil,
+                                   handPosition: tile.handRaisedPosition,
                                    // Ours is never a hero even if something upstream said so: it is
                                    // not in the ranking, so nothing can rank it.
                                    isHero: tile.isLocal ? false : tile.isHero,

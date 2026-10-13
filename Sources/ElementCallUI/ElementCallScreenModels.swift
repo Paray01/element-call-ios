@@ -27,7 +27,9 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
     /// Loud enough to count as talking. A threshold crossing, not a level: nothing continuous
     /// belongs in a tile, which the whole screen is rebuilt to redraw.
     public let isSpeaking: Bool
-    public let hasHandRaised: Bool
+    /// The hand's place in the queue, as the core numbers it (009 R6); nil with the hand down, or
+    /// where no hand is shown (R33).
+    public let handPosition: Int?
     /// The model marks the tile worth the largest slot — a screen share today, a pin later. It does
     /// not choose a spotlight; `ElementCallSpotlight` is where that is decided.
     public let isHero: Bool
@@ -43,6 +45,10 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
     
     public var isScreenShare: Bool {
         id.kind == .screenShare
+    }
+    
+    public var hasHandRaised: Bool {
+        handPosition != nil
     }
 }
 
@@ -162,7 +168,7 @@ extension ElementCallTile {
                         isMicrophoneMuted: isMicrophoneMuted,
                         hasVideo: hasVideo,
                         isSpeaking: isSpeaking,
-                        hasHandRaised: hasHandRaised,
+                        handPosition: handPosition,
                         isHero: isHero,
                         stats: stats)
     }
@@ -177,13 +183,13 @@ extension ElementCallTile {
                         isMicrophoneMuted: isMicrophoneMuted,
                         hasVideo: hasVideo,
                         isSpeaking: isSpeaking,
-                        hasHandRaised: false,
+                        handPosition: nil,
                         isHero: isHero,
                         stats: stats)
     }
     
     /// Our own hand, for the harness, which has no call to read it back from.
-    func withHandRaised(_ hasHandRaised: Bool) -> ElementCallTile {
+    func withHandPosition(_ handPosition: Int?) -> ElementCallTile {
         guard isLocal else { return self }
         return ElementCallTile(id: id,
                                userID: userID,
@@ -193,7 +199,7 @@ extension ElementCallTile {
                                isMicrophoneMuted: isMicrophoneMuted,
                                hasVideo: hasVideo,
                                isSpeaking: isSpeaking,
-                               hasHandRaised: hasHandRaised,
+                               handPosition: handPosition,
                                isHero: isHero,
                                stats: stats)
     }
@@ -214,7 +220,7 @@ extension ElementCallTile {
                                isMicrophoneMuted: isMicrophoneMuted,
                                hasVideo: hasVideo,
                                isSpeaking: isSpeaking,
-                               hasHandRaised: hasHandRaised,
+                               handPosition: handPosition,
                                isHero: isHero,
                                stats: stats)
     }

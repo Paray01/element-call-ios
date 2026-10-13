@@ -146,7 +146,27 @@ struct RaisedHandControlTests {
         context.send(viewAction: .toggleRaisedHand)
         
         #expect(context.viewState.isHandRaised)
-        #expect(context.viewState.tiles.filter(\.hasHandRaised).map(\.isLocal).contains(true))
+        // Nobody else in the group has a hand up, so ours is first.
+        #expect(context.viewState.tiles.filter(\.hasHandRaised).map(\.handPosition) == [1])
+        #expect(context.viewState.tiles.first { $0.isLocal }?.handPosition == 1)
+    }
+    
+    /// The number is the core's, carried through unchanged: never recomputed from raise times, which
+    /// would number only the tiles in the window (009 R6, C9).
+    @Test
+    func theTileCarriesTheCoresPosition() {
+        let ffi = FfiCallTile(memberId: "@bob:example.com:DEVICE",
+                              kind: .person,
+                              userId: "@bob:example.com",
+                              deviceId: "DEVICE",
+                              hero: false,
+                              hasVideo: false,
+                              microphoneMuted: false,
+                              speaking: false,
+                              handRaisedAtMs: 5,
+                              handRaisedPosition: 3,
+                              reachable: true)
+        #expect(MatrixRTCTile(ffi, localMemberID: "me").handRaisedPosition == 3)
     }
     
     private func waitUntilSettled(_ controller: ElementCallController) async throws {
@@ -200,7 +220,7 @@ struct SmallCallRaisedHandTests {
     
     @Test
     func hidingAHandKeepsEverythingElse() {
-        let tile = Fixtures.tile("Erin", isSpeaking: true, hasHandRaised: true)
+        let tile = Fixtures.tile("Erin", isSpeaking: true, handPosition: 1)
         let hidden = tile.withHandHidden()
         #expect(!hidden.hasHandRaised)
         #expect(hidden.id == tile.id && hidden.isSpeaking)

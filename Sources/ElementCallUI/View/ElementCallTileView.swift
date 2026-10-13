@@ -365,8 +365,8 @@ struct ElementCallTileView: View, Equatable {
                 }
                 // The raised hand belongs to the person, and a person is their camera tile. On a
                 // share as well it reads as two people with their hands up.
-                if tile.hasHandRaised, !tile.isScreenShare, !isHandInNamePill {
-                    ElementCallRaisedHandBadge()
+                if let position = tile.handPosition, !tile.isScreenShare, !isHandInNamePill {
+                    ElementCallRaisedHandBadge(position: position)
                 }
                 Spacer()
             }
@@ -379,9 +379,14 @@ struct ElementCallTileView: View, Equatable {
                         // is instead.
                         if tile.isScreenShare {
                             style.icons.icon(.shareScreen, size: .xSmall, relativeTo: .bodySM)
-                        } else if isHandInNamePill {
-                            style.icons.icon(.raisedHand, size: .xSmall, relativeTo: .bodySM)
-                                .accessibilityLabel("Hand raised")
+                        } else if isHandInNamePill, let position = tile.handPosition {
+                            // The number between the hand and the name, as on Android (009 C9).
+                            HStack(spacing: 4) {
+                                style.icons.icon(.raisedHand, size: .xSmall, relativeTo: .bodySM)
+                                Text("\(position)")
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(ElementCallRaisedHandBadge.spokenLabel(position: position))
                         } else {
                             style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
                         }
@@ -493,20 +498,34 @@ struct ElementCallTileView: View, Equatable {
 /// A raised hand: the design's light disc with a dark hand, lifted off the picture by a shadow
 /// rather than sunk into it like the dark name pills, so it reads on any video. Shared by the tile
 /// and the full-screen chrome, which draws its own.
+///
+/// The hand's place in the queue follows the hand, which widens the disc into a pill. Design has no
+/// frame for the number; this is Android's, so a mixed call looks the same on both (009 C9).
 struct ElementCallRaisedHandBadge: View {
+    let position: Int
+    
     @Environment(\.elementCallStyle) private var style
     
     var body: some View {
-        // 28 pt round a 20 pt icon. Padding rather than a fixed frame, so the disc grows with the
-        // icon at larger text sizes.
-        style.icons.icon(.raisedHand, size: .small, relativeTo: .bodySM)
-            .foregroundStyle(style.theme.iconOnSolidPrimary)
-            .padding(4)
-            .background(style.theme.bgActionPrimaryRest, in: Circle())
-            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
-            // A drawing alone does not exist for VoiceOver (009 R21).
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Hand raised")
+        // 28 pt high round a 20 pt icon. Padding rather than a fixed frame, so the badge grows with
+        // the icon at larger text sizes.
+        HStack(spacing: 2) {
+            style.icons.icon(.raisedHand, size: .small, relativeTo: .bodySM)
+            Text("\(position)")
+                .font(style.theme.bodySMSemibold)
+                .padding(.trailing, 2)
+        }
+        .foregroundStyle(style.theme.iconOnSolidPrimary)
+        .padding(4)
+        .background(style.theme.bgActionPrimaryRest, in: Capsule())
+        .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+        // A drawing alone does not exist for VoiceOver (009 R21).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.spokenLabel(position: position))
+    }
+    
+    static func spokenLabel(position: Int) -> String {
+        "Hand raised, number \(position) in the queue"
     }
 }
 
@@ -635,13 +654,13 @@ struct ElementCallTileView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Speaking")
         tileView(Fixtures.bob)
             .previewDisplayName("Muted")
-        tileView(Fixtures.tile("Erin", hasHandRaised: true))
+        tileView(Fixtures.tile("Erin", handPosition: 1))
             .previewDisplayName("Hand raised")
-        tileView(Fixtures.tile("Erin", isSpeaking: true, hasHandRaised: true))
+        tileView(Fixtures.tile("Erin", isSpeaking: true, handPosition: 12))
             .previewDisplayName("Speaking with hand raised")
         tileView(Fixtures.share("Frank"), isSpotlight: true)
             .previewDisplayName("Screen share spotlight")
-        tileView(Fixtures.tile("Dan", hasVideo: true, isSpeaking: true, hasHandRaised: true), isSpotlight: true)
+        tileView(Fixtures.tile("Dan", hasVideo: true, isSpeaking: true, handPosition: 1), isSpotlight: true)
             .previewDisplayName("Spotlight with hand raised")
         // A share in an ordinary strip cell, which it could never be while a share was a flag on its
         // owner's tile that only the spotlight honoured. It is fitted rather than filled at this

@@ -107,6 +107,7 @@ nonisolated extension MatrixRTCTile {
                   isMicrophoneMuted: tile.microphoneMuted,
                   isSpeaking: tile.speaking,
                   handRaisedAt: tile.handRaisedAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) },
+                  handRaisedPosition: tile.handRaisedPosition.map(Int.init),
                   isReachable: tile.reachable)
     }
 }

@@ -44,9 +44,9 @@ final class RaisedHandUITests: XCTestCase {
     }
     
     /// The badge on our own tile, found by what VoiceOver hears, which is also the proof that it
-    /// reached a view at all.
+    /// reached a view at all. Nobody else in `group` has a hand up, so ours is first in the queue.
     private var ourHand: XCUIElement {
-        tile("alice").descendants(matching: .any)["Hand raised"]
+        tile("alice").descendants(matching: .any)["Hand raised, number 1 in the queue"]
     }
     
     private var exitButton: XCUIElement {
