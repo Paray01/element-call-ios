@@ -875,6 +875,8 @@ public final class MatrixRTCMediaSession {
             playJoinLeaveSound(.join, for: memberID, participantCount: participantCount)
         case .participantLeft(let memberID, let participantCount):
             playJoinLeaveSound(.leave, for: memberID, participantCount: participantCount)
+        case .handRaised(let memberID, _):
+            playRaisedHandSound(for: memberID)
         case .ended(let reason):
             MatrixRTCLog.info("Media session ended: \(reason)")
             joinLeaveSoundPolicy.silence()
@@ -903,6 +905,14 @@ public final class MatrixRTCMediaSession {
         MatrixRTCLog.info("\(memberID) \(sound == .join ? "joined" : "left"), \(participantCount) in the call: \(plays ? "playing" : "silent")")
         if plays {
             soundEffectRenderer?.play(sound)
+        }
+    }
+    
+    private func playRaisedHandSound(for memberID: String) {
+        let plays = RaisedHandSoundPolicy.shouldPlay(order: tiles.order, localMemberID: localMemberID)
+        MatrixRTCLog.info("\(memberID) raised a hand: \(plays ? "playing" : "silent, one-to-one")")
+        if plays {
+            soundEffectRenderer?.play(.raiseHand)
         }
     }
     
