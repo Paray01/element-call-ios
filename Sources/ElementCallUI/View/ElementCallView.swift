@@ -477,13 +477,25 @@ struct ElementCallView: View {
             if let connectedAt = context.viewState.connectedAt {
                 Text(connectedAt, style: .timer)
                     .font(style.theme.bodySM)
-                    .foregroundStyle(context.viewState.isMediaDegraded ? style.theme.textCriticalPrimary : style.theme.textSecondary)
+                    .foregroundStyle(durationColour)
                     .monospacedDigit()
             }
         case .ended:
             Text("Call ended").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .failed(let message):
             Text(message).font(style.theme.bodySM).foregroundStyle(style.theme.textCriticalPrimary).lineLimit(2)
+        }
+    }
+    
+    /// A direct call's duration sits over the other person's picture or the scrim on it, where the
+    /// secondary grey all but disappears; elsewhere the band behind the top bar is the canvas.
+    private var durationColour: Color {
+        if context.viewState.isMediaDegraded {
+            style.theme.textCriticalPrimary
+        } else if context.viewState.isDirect {
+            style.theme.textPrimary
+        } else {
+            style.theme.textSecondary
         }
     }
     
