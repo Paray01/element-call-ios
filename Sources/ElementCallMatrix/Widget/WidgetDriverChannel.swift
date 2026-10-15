@@ -65,6 +65,11 @@ final nonisolated class WidgetCapabilityGrant: WidgetCapabilitiesProvider, Senda
                                   updateDelayedEvent: true,
                                   sendDelayedEvent: true,
                                   downloadFiles: false,
-                                  rtcTransports: true)
+                                  rtcTransports: true,
+                                  // MSC4533's homeserver-side LiveKit token and delayed leave. The
+                                  // core gets its token from the focus's own service with an OpenID
+                                  // token, and keeps the delayed leave itself.
+                                  rtcLivekitGetToken: false,
+                                  rtcLivekitDelegateDelayedLeave: false)
     }
 }
