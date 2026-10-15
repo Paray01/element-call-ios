@@ -131,6 +131,10 @@ public nonisolated struct ElementCallStrings: Sendable {
     public var speaker: String
     public var phone: String
     public var headphones: String
+    /// Beneath the room's name while a direct call rings the other person.
+    public var calling: String
+    /// What a screen reader says for the ringing avatar, given the callee's name.
+    public var callingPerson: @Sendable (String) -> String
     
     public init(you: String = "You",
                 error: String = "Error",
@@ -138,7 +142,9 @@ public nonisolated struct ElementCallStrings: Sendable {
                 back: String = "Back",
                 speaker: String = "Speaker",
                 phone: String = "Phone",
-                headphones: String = "Headphones") {
+                headphones: String = "Headphones",
+                calling: String = "Calling\u{2026}",
+                callingPerson: @escaping @Sendable (String) -> String = { "Calling \($0)" }) {
         self.you = you
         self.error = error
         self.stop = stop
@@ -146,5 +152,7 @@ public nonisolated struct ElementCallStrings: Sendable {
         self.speaker = speaker
         self.phone = phone
         self.headphones = headphones
+        self.calling = calling
+        self.callingPerson = callingPerson
     }
 }

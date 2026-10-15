@@ -15,6 +15,28 @@ version will actually read it.
 `.raisedHand`. A host theme that draws its own speaking ring can do the same for a raised hand by
 implementing `raisedHandBorder(in:)`; the default is design's.
 
+**`ElementCallData.isStartingCall` must be the user's choice to call**, never "the room has no call
+yet": in a direct chat it now rings, and the core ends the call when the callee declines, lets it
+ring out, or hangs up. `ElementCallConnection` gains `calling` and carries why the call `ended`;
+`MatrixRTCRoom.joinCall(kind:)` replaces `joinCall(notify:)`, and degradation is read from
+`MatrixRTCCall.status`, no longer from the media session.
+
+**`ElementCallSystemProvidingProtocol.endCall(roomID:)` is `endCall(roomID:reason:)`.** Only
+`.local` is a hang-up to send as CallKit's end-call action; report every other `ElementCallEndReason`
+with `reportCall(with:endedAt:reason:)` as `.remoteEnded`, `.unanswered` or `.failed`, so a declined
+or unanswered call is not logged as one we ended.
+
+**`ElementCallThemeProtocol` gains `soundWaveFills` and `soundWaveEdge`**, the sound waves round a
+speaking one-to-one avatar. Both have defaults, the design's translucent greys; a theme re-branding
+its colours can override them.
+
+**Render `ElementCallAvatarSize.full` at 140 pt.** The stage now draws it at 140 pt on a large tile,
+a one-to-one call's included, and on the ringing screen, whatever size it arrives at; a photo
+rendered smaller is drawn larger than it was loaded.
+
+**`ElementCallIcon` gains `voiceCall`**, shown beside "Calling…" while a voice call rings. A host
+rendering its own icons maps it, to Compound's `voiceCallSolid`.
+
 ## 0.1.0-rc.10 - 2026-10-08
 
 **`MatrixRTCCall` is renamed `MatrixRTCMediaSession`, and `MatrixRTCElementCallCompat` is renamed

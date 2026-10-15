@@ -1,5 +1,5 @@
 {
-  "originHash" : "aa019bd2b1c319cde62d39425accc19b19581a002bfe3763dfbfdecca7147318",
+  "originHash" : "2985e697c52ba4dc5cc16c2e2f97068ac713af2ca8cdbe6a9fc38dfdff634143",
   "pins" : [
     {
       "identity" : "compound-design-tokens",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/element-hq/matrix-rust-rtc",
       "state" : {
-        "revision" : "529eacf99fee5403bb6aba67742a50581f327d2a",
-        "version" : "0.5.0-rc.4"
+        "revision" : "c7a81b6742dc5e571b90b05f5109677384efb933",
+        "version" : "0.5.0-rc.5"
       }
     },
     {
@@ -35,6 +35,15 @@
       "state" : {
         "revision" : "4fb9e7cbb4b8f5a7354005db39447f570d6b3e19",
         "version" : "1.7.3"
+      }
+    },
+    {
+      "identity" : "swift-issue-reporting",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-issue-reporting",
+      "state" : {
+        "revision" : "b23bb4493c439d3e05152bc167014235ba3d47fc",
+        "version" : "2.1.2"
       }
     },
     {
@@ -53,15 +62,6 @@
       "state" : {
         "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
         "version" : "603.0.2"
-      }
-    },
-    {
-      "identity" : "xctest-dynamic-overlay",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
-      "state" : {
-        "revision" : "d9308ad679143c26a30dec52daefe82f54af2b82",
-        "version" : "1.13.1"
       }
     }
   ],
