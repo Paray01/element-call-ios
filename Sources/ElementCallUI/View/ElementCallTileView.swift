@@ -253,6 +253,9 @@ struct ElementCallTileView: View, Equatable {
                         .id(tile.id)
                 }
             } else {
+                if appearance == .fullBleed {
+                    ElementCallSoundWaves(isSpeaking: tile.isSpeaking, avatarDiameter: Self.largeAvatarDiameter)
+                }
                 avatar
             }
         }
@@ -462,7 +465,8 @@ struct ElementCallTileView: View, Equatable {
             EmptyView()
         } else if tile.isSpeaking, appearance == .card || appearance == .floating, !isSpotlight {
             // Not the spotlight, whose position already says who is talking, nor the one other
-            // person in a one-to-one call, who can be no one else. A small call's other tiles are
+            // person in a one-to-one call, whose picture has no edge to ring: they have sound waves
+            // round their avatar instead (`ElementCallSoundWaves`). A small call's other tiles are
             // ringed like the grid's (019 R9). Speaking wins over a raised hand, which still has
             // its badge.
             ring(style.theme.activeSpeakerBorder(in: size))

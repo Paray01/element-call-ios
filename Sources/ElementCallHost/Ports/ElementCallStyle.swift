@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import CompoundDesignTokens
 import SwiftUI
 
 // MARK: - Theme
@@ -53,6 +54,12 @@ public nonisolated protocol ElementCallThemeProtocol: Sendable {
     
     /// The ring round a tile whose member has a hand up, the same way.
     @MainActor func raisedHandBorder(in size: CGSize) -> [AnyShapeStyle]
+    
+    /// The waves round a one-to-one call's avatar while the other person speaks, innermost first:
+    /// where a card has its speaking ring on its edge, a picture filling the screen has none.
+    @MainActor var soundWaveFills: [Color] { get }
+    /// The edge of each wave.
+    @MainActor var soundWaveEdge: Color { get }
 }
 
 public extension ElementCallThemeProtocol {
@@ -64,6 +71,15 @@ public extension ElementCallThemeProtocol {
     
     @MainActor func raisedHandBorder(in size: CGSize) -> [AnyShapeStyle] {
         ElementCallBorderGradient.raisedHand.layers(in: size)
+    }
+    
+    /// Element Call web's: the dark theme's translucent greys, since the call screen is always dark.
+    @MainActor var soundWaveFills: [Color] {
+        [CompoundCoreColorTokens.alphaGray400, CompoundCoreColorTokens.alphaGray300, CompoundCoreColorTokens.alphaGray200]
+    }
+    
+    @MainActor var soundWaveEdge: Color {
+        CompoundCoreColorTokens.alphaGray300
     }
 }
 

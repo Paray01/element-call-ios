@@ -617,6 +617,11 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
                                                             ElementCallPreviewFixtures.bob],
                                                     isDirect: true))
             .previewDisplayName("Two people")
+        // Bob speaking with his camera off: the sound waves round his avatar.
+        screen(ElementCallPreviewFixtures.connected(tiles: [ElementCallPreviewFixtures.alice,
+                                                            ElementCallPreviewFixtures.tile("Bob", isSpeaking: true)],
+                                                    isDirect: true))
+            .previewDisplayName("Two people, speaking")
         // A direct call ringing (030): the callee's avatar, our tile over it, the chrome held up.
         screen(ElementCallPreviewFixtures.ringing())
             .previewDisplayName("Ringing")

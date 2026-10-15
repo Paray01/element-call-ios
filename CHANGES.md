@@ -26,6 +26,10 @@ ring out, or hangs up. `ElementCallConnection` gains `calling` and carries why t
 with `reportCall(with:endedAt:reason:)` as `.remoteEnded`, `.unanswered` or `.failed`, so a declined
 or unanswered call is not logged as one we ended.
 
+**`ElementCallThemeProtocol` gains `soundWaveFills` and `soundWaveEdge`**, the sound waves round a
+speaking one-to-one avatar. Both have defaults, the design's translucent greys; a theme re-branding
+its colours can override them.
+
 **Render `ElementCallAvatarSize.full` at 140 pt.** The stage now draws it at 140 pt on a large tile,
 a one-to-one call's included, and on the ringing screen, whatever size it arrives at; a photo
 rendered smaller is drawn larger than it was loaded.
