@@ -436,14 +436,14 @@ public final class ElementCallController {
     
     func audioSessionDidDeactivate() {
         isAudioSessionActive = false
-        call?.stopAudio()
+        rtcCall?.stopAudio()
     }
     
     /// A video call is looked at, not held to an ear, so it starts on the loudspeaker. A headset
     /// still wins over both built-in outputs when one is connected.
     private func startAudioIfReady() {
-        guard isAudioSessionActive, let call else { return }
-        call.startAudio()
+        guard isAudioSessionActive, let rtcCall else { return }
+        rtcCall.startAudio()
         if let callData, !callData.isAudioCall, CallAudioSessionConfigurator.isBuiltInReceiver {
             setLoudspeaker(true)
         }
@@ -462,6 +462,8 @@ public final class ElementCallController {
         guard let rtcCall = await joinCall(for: callData, room: room) else { return }
         
         follow(rtcCall, roomID: room.roomID)
+        // From the join rather than from media: the ring goes out now, and its ringback with it.
+        activateAudio()
         
         let call: MatrixRTCMediaSession
         do {
@@ -537,21 +539,6 @@ public final class ElementCallController {
     private func publishMedia(on call: MatrixRTCMediaSession,
                               rtcCall: MatrixRTCCall,
                               room: any ElementCallRoomContextProtocol) async {
-        // Where nothing else owns the session, we do: the simulator, and an iOS app on macOS,
-        // where the host's system-call port is inert because CallKit is unavailable. Runtime
-        // rather than `#if`, because an iOS-on-Mac binary is indistinguishable from an iOS one at
-        // compile time.
-        if CallAudioSessionConfigurator.isSelfActivating {
-            do {
-                try CallAudioSessionConfigurator.activate()
-                isAudioSessionActive = true
-            } catch {
-                log(.error, "could not activate the audio session: \(error)")
-            }
-        }
-        // The system usually activated the session while we were still joining.
-        startAudioIfReady()
-        
         // `pendingMicrophoneMuted`, not `isMicrophoneMuted`: `self.call` is assigned before this runs,
         // so the accessor would already be answering from the fresh call -- unmuted -- and would
         // discard a mute made while joining. The same goes for the camera below.
@@ -575,6 +562,22 @@ public final class ElementCallController {
             return
         }
         refreshAudioRoute()
+    }
+    
+    /// Where nothing else owns the session, we do: the simulator, and an iOS app on macOS, where the
+    /// host's system-call port is inert because CallKit is unavailable. Runtime rather than `#if`,
+    /// because an iOS-on-Mac binary is indistinguishable from an iOS one at compile time. On a
+    /// device the system usually activated the session while we were still joining.
+    private func activateAudio() {
+        if CallAudioSessionConfigurator.isSelfActivating {
+            do {
+                try CallAudioSessionConfigurator.activate()
+                isAudioSessionActive = true
+            } catch {
+                log(.error, "could not activate the audio session: \(error)")
+            }
+        }
+        startAudioIfReady()
     }
     
     /// The connection follows the core from the join on.
@@ -659,6 +662,7 @@ public final class ElementCallController {
         await call?.disconnect()
         await rtcCall.leave()
         await shutDownRoom()
+        await rtcCall.releaseAudio()
         if self.call === call {
             self.call = nil
         }
@@ -684,6 +688,7 @@ public final class ElementCallController {
         statusTask = nil
         pictureInPicture.unbind()
         
+        let endedCall = rtcCall
         if let rtcCall {
             if reason == .left {
                 await rtcCall.leave()
@@ -696,17 +701,6 @@ public final class ElementCallController {
         rtcCall = nil
         spotlightTileID = nil
         isSpotlightTileExact = false
-        system.endCall(roomID: roomID)
-        // Paired with the activation in publishMedia through the same predicate, so the two
-        // cannot disagree about which platforms they apply to and leave the session up.
-        if CallAudioSessionConfigurator.isSelfActivating {
-            CallAudioSessionConfigurator.deactivate()
-            // Only where we own the session. On device CallKit owns it and reports the
-            // deactivation through `didDeactivate`; clearing the flag here instead would mean a
-            // second call starting before that arrives never sees an activation of its own, and
-            // `startAudioIfReady` would refuse to start audio for a call that is otherwise fine.
-            isAudioSessionActive = false
-        }
         
         if case .failed = connection {
             // Keep the failure visible until the screen is dismissed.
@@ -714,7 +708,23 @@ public final class ElementCallController {
             connection = .ended(reason)
         }
         connectedAt = nil
+        // The screen closes now (030 R13), and the audio after it: a decline's or a timeout's sound
+        // plays to its end first (R25), and the system call ends with it, since ending that is
+        // what takes the audio session away.
         actionsSubject.send(.ended)
+        await endedCall?.releaseAudio()
+        system.endCall(roomID: roomID)
+        // Paired with the activation in `activateAudio` through the same predicate, so the two
+        // cannot disagree about which platforms they apply to and leave the session up. Not under
+        // a call started while the sound played out, which has the session now.
+        if CallAudioSessionConfigurator.isSelfActivating, !isInCall {
+            CallAudioSessionConfigurator.deactivate()
+            // Only where we own the session. On device CallKit owns it and reports the
+            // deactivation through `didDeactivate`; clearing the flag here instead would mean a
+            // second call starting before that arrives never sees an activation of its own, and
+            // `startAudioIfReady` would refuse to start audio for a call that is otherwise fine.
+            isAudioSessionActive = false
+        }
     }
     
     /// Back to idle once the screen has gone; a new call can start.

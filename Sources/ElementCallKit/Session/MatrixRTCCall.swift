@@ -43,13 +43,25 @@ public final class MatrixRTCCall {
     @ObservationIgnored private var membershipReader: Task<Void, Never>?
     @ObservationIgnored private var statusReader: Task<Void, Never>?
     
-    init(rtcCall: any RtcCallProtocol) {
+    /// The call's engine and sounds, from the join: the ringback plays before there is media.
+    @ObservationIgnored let audio: CallAudio
+    @ObservationIgnored private let clock: any Clock<Duration>
+    /// Time on ``clock`` since the join.
+    @ObservationIgnored private let elapsed: () -> Duration
+    /// When the end sound finishes, on ``elapsed``; the audio is released no earlier (030 R25).
+    @ObservationIgnored private var endSoundEnds: Duration?
+    
+    init(rtcCall: any RtcCallProtocol, audio: CallAudio = CallAudio(), clock: any Clock<Duration> = ContinuousClock()) {
         self.rtcCall = rtcCall
+        self.audio = audio
+        self.clock = clock
+        elapsed = stopwatch(clock)
         roomID = rtcCall.roomId()
         slotID = rtcCall.slotId()
         localMemberID = rtcCall.memberId()
         status = MatrixRTCCallStatus(rtcCall.status())
         (statusUpdates, statusContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
+        playSounds(for: status)
     }
     
     /// Reads the roster until the room is shut down. Each `next()` waits for a change, the first
@@ -99,7 +111,7 @@ public final class MatrixRTCCall {
             throw MatrixRTCError.media("\(error)")
         }
         
-        let mediaSession = MatrixRTCMediaSession(localMemberID: localMemberID, mediaSession: ffiSession)
+        let mediaSession = MatrixRTCMediaSession(localMemberID: localMemberID, mediaSession: ffiSession, audio: audio)
         self.mediaSession = mediaSession
         await mediaSession.start()
         MatrixRTCLog.info("Media connected for \(roomID)/\(slotID) as \(localMemberID)")
@@ -123,6 +135,41 @@ public final class MatrixRTCCall {
             MatrixRTCLog.info("Left \(roomID)/\(slotID)")
         } catch {
             MatrixRTCLog.warning("Failed to leave \(roomID)/\(slotID): \(error)")
+        }
+    }
+    
+    // MARK: - Audio
+    
+    /// Once the system has activated the audio session (CallKit's `didActivate`, or directly where
+    /// nothing else owns it). Returns before the engine is running: starting it reconfigures the
+    /// graph, which must not happen synchronously on this thread.
+    public func startAudio() {
+        audio.start()
+    }
+    
+    /// CallKit's `didDeactivate`.
+    public func stopAudio() {
+        audio.stop()
+    }
+    
+    /// After the call has ended: lets a decline's or a timeout's sound play to its end, then shuts the
+    /// call's audio down (030 R25). Nothing to wait for after a hang-up, which has no sound.
+    public func releaseAudio() async {
+        if let endSoundEnds {
+            let remaining = endSoundEnds - elapsed()
+            if remaining > .zero {
+                try? await clock.sleep(for: remaining)
+            }
+        }
+        audio.shutdown()
+        MatrixRTCLog.info("Audio released for \(roomID)/\(slotID)")
+    }
+    
+    private func playSounds(for status: MatrixRTCCallStatus) {
+        audio.setRingback(RingingSoundPolicy.playsRingback(status))
+        if let sound = RingingSoundPolicy.endSound(status) {
+            audio.play(sound)
+            endSoundEnds = audio.duration(of: sound).map { elapsed() + $0 }
         }
     }
     
@@ -159,6 +206,7 @@ public final class MatrixRTCCall {
         guard status != self.status else { return }
         MatrixRTCLog.info("\(roomID)/\(slotID) is \(status)")
         self.status = status
+        playSounds(for: status)
         statusContinuation.yield(status)
     }
     

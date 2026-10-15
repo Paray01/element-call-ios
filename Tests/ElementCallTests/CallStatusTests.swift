@@ -72,7 +72,7 @@ struct CallStatusTests {
         fixture.rtcCall.statusSubscription.push(.ended(reason: .othersLeft))
         try await waitUntil { fixture.controller.connection == .ended(.othersLeft) }
         #expect(fixture.rtcCall.leaveCount == 0)
-        #expect(fixture.system.requests.last == .end(roomID: roomID))
+        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID) }
     }
     
     @Test
@@ -95,6 +95,22 @@ struct CallStatusTests {
         #expect(fixture.system.requests.contains(.connected(roomID: roomID)))
     }
     
+    /// The screen closes at the decline, and the call's audio, which ending the system call takes
+    /// away, only once the decline's sound has played (030 R13, R25).
+    @Test
+    func aDeclineSoundPlaysOutBeforeTheSystemCallEnds() async throws {
+        let clock = MatrixRTCManualClock()
+        let fixture = start(status: .calling(callee: callee, ring: .sending, media: .connecting), clock: clock)
+        
+        fixture.rtcCall.statusSubscription.push(.ended(reason: .declined))
+        try await waitUntil { fixture.controller.connection == .ended(.declined) }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(!fixture.system.requests.contains(.end(roomID: roomID)))
+        
+        clock.advance(by: Self.endSoundLength)
+        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID) }
+    }
+    
     @Test
     func hangingUpLeaves() async throws {
         let fixture = start(status: .calling(callee: callee, ring: .sending, media: .connecting))
@@ -102,6 +118,8 @@ struct CallStatusTests {
         fixture.controller.hangUp()
         try await waitUntil { fixture.controller.connection == .ended(.left) }
         #expect(fixture.rtcCall.leaveCount == 1)
+        // Nothing to play out, so nothing to wait for.
+        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID) }
     }
     
     // MARK: - Helpers
@@ -116,7 +134,10 @@ struct CallStatusTests {
         let call: MatrixRTCCall
     }
     
-    private func start(status: FfiCallStatus) -> Fixture {
+    /// One second of silence for each end sound, so a test knows exactly how long one lasts.
+    private static let endSoundLength = Duration.seconds(1)
+    
+    private func start(status: FfiCallStatus, clock: any Clock<Duration> = ContinuousClock()) -> Fixture {
         let system = ElementCallFakeSystem()
         let controller = ElementCallController(rtcClient: MatrixRTCClient(transport: ElementCallFakeTransport()),
                                                system: system,
@@ -124,7 +145,9 @@ struct CallStatusTests {
                                                style: .stock,
                                                logger: nil)
         let rtcCall = FakeRtcCall(status: status)
-        let call = MatrixRTCCall(rtcCall: rtcCall)
+        let silence = [Float](repeating: 0, count: 48000)
+        let audio = CallAudio(soundEffects: CallSoundEffectRenderer(join: [], leave: [], raiseHand: [], declined: silence, timeout: silence))
+        let call = MatrixRTCCall(rtcCall: rtcCall, audio: audio, clock: clock)
         controller.setPreviewState(callData: starting, room: ElementCallFakeRoom(), connection: .joining, rtcCall: call)
         call.start()
         controller.follow(call, roomID: roomID)

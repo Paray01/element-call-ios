@@ -102,7 +102,12 @@ public final class MatrixRTCMediaSession {
     /// in order: a queue rather than a detached task, because two requests for one stream a frame
     /// apart must not arrive swapped, or the stale one sticks.
     private let mediaRequests = DispatchQueue(label: "io.element.call.media-requests", qos: .utility)
-    private let audioEngine = CallAudioEngine()
+    /// The call's, borrowed: it outlives this session at both ends (see ``CallAudio``).
+    private let audio: CallAudio
+    private var audioEngine: CallAudioEngine {
+        audio.engine
+    }
+    
     @ObservationIgnored private lazy var microphone = MicrophoneCapturer(engine: audioEngine) { [weak self] level in
         Task { @MainActor in self?.setAudioLevel(level, for: self?.localMemberID) }
     }
@@ -161,10 +166,8 @@ public final class MatrixRTCMediaSession {
         set { joinLeaveSoundPolicy.participantCap = newValue }
     }
     
-    /// Whether a join or leave sounds, and what every sound effect plays through. The renderer
-    /// arrives once the bundled files are decoded, off this actor; until then nothing plays.
+    /// Whether a join or leave sounds. They play through the call's ``CallAudio``.
     @ObservationIgnored private var joinLeaveSoundPolicy: JoinLeaveSoundPolicy
-    @ObservationIgnored private var soundEffectRenderer: CallSoundEffectRenderer?
     /// Time on ``clock`` since the session was made: what the sound throttle measures against.
     @ObservationIgnored private let elapsed: () -> Duration
     
@@ -195,16 +198,20 @@ public final class MatrixRTCMediaSession {
     /// follows it and the harness draws its test pattern there.
     private let capturesCamera: Bool
     
+    /// `audio` defaults to one of its own for a session with no call around it: the harness's and
+    /// the tests'.
     init(localMemberID: String,
          mediaSession: any MediaSessionProtocol,
+         audio: CallAudio = CallAudio(),
          clock: any Clock<Duration> = ContinuousClock(),
          capturesCamera: Bool = true) {
         self.localMemberID = localMemberID
+        self.audio = audio
         self.mediaSession = mediaSession
         self.clock = clock
         self.capturesCamera = capturesCamera
         joinLeaveSoundPolicy = JoinLeaveSoundPolicy(participantCap: Self.defaultParticipantCapForJoinLeaveSounds)
-        elapsed = Self.stopwatch(clock)
+        elapsed = stopwatch(clock)
         (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
     }
     
@@ -221,7 +228,6 @@ public final class MatrixRTCMediaSession {
         tasks.append(Task { [weak self] in await self?.pumpTileRoster() })
         tasks.append(Task { [weak self] in await self?.pumpLocalState() })
         tasks.append(Task { [weak self] in await self?.pollReceiveStats() })
-        tasks.append(Task { [weak self] in await self?.installSoundEffects() })
         seedParticipants()
         apply(mediaSession.roster())
         apply(mediaSession.localState())
@@ -255,21 +261,6 @@ public final class MatrixRTCMediaSession {
     /// microphone, opening it tells us.
     static func playbackCandidates(_ order: [MatrixRTCTileRef], localMemberID: String) -> Set<String> {
         Set(order.filter { $0.id.kind == .person && $0.id.memberID != localMemberID }.map(\.id.memberID))
-    }
-    
-    // MARK: - Audio device
-    
-    /// From CallKit's `didActivate audioSession` (or directly on the simulator).
-    ///
-    /// Returns before the engine is actually running: starting it means reconfiguring the graph,
-    /// which is exactly what must not happen synchronously on this thread.
-    public func startAudio() {
-        audioEngine.start()
-    }
-    
-    /// From CallKit's `didDeactivate audioSession`.
-    public func stopAudio() {
-        audioEngine.stop()
     }
     
     // MARK: - Microphone
@@ -790,11 +781,11 @@ public final class MatrixRTCMediaSession {
         videoSources.values.forEach { $0.close() }
         videoSources.removeAll()
         releasedVideoStreams.removeAll()
-        // Stops the engine *and* detaches every node in one hop. Each `stop()` above only flips a
-        // flag and enqueues its detach, so the whole audio teardown costs this actor microseconds
-        // rather than blocking it on graph reconfiguration — which is what the render thread used
-        // to deadlock against.
-        audioEngine.shutdown()
+        // Detaches every node media added in one hop. Each `stop()` above only flips a flag and
+        // enqueues its detach, so the whole audio teardown costs this actor microseconds rather
+        // than blocking it on graph reconfiguration — which is what the render thread used to
+        // deadlock against. The engine itself is the call's, and outlives this.
+        audioEngine.releaseMedia()
         do {
             try await mediaSession.disconnect()
         } catch {
@@ -878,21 +869,13 @@ public final class MatrixRTCMediaSession {
     
     // MARK: - Sound effects
     
-    /// Decoded off this actor: it is file IO and a decode, at the moment the call is connecting.
-    private func installSoundEffects() async {
-        let renderer = await Task.detached(priority: .utility) { CallSoundEffectRenderer.bundled() }.value
-        guard let renderer, !Task.isCancelled else { return }
-        soundEffectRenderer = renderer
-        audioEngine.setSoundEffectSource(render: renderer.renderBlock)
-    }
-    
     /// One line per announced change, played or not, so a rageshake can show how often a membership
     /// lapses and returns (024's open question).
     private func playJoinLeaveSound(_ sound: CallSoundEffect, for memberID: String, participantCount: Int) {
         let plays = joinLeaveSoundPolicy.shouldPlay(sound, participantCount: participantCount, at: elapsed())
         MatrixRTCLog.info("\(memberID) \(sound == .join ? "joined" : "left"), \(participantCount) in the call: \(plays ? "playing" : "silent")")
         if plays {
-            soundEffectRenderer?.play(sound)
+            audio.play(sound)
         }
     }
     
@@ -900,14 +883,8 @@ public final class MatrixRTCMediaSession {
         let plays = RaisedHandSoundPolicy.shouldPlay(order: tiles.order, localMemberID: localMemberID)
         MatrixRTCLog.info("\(memberID) raised a hand: \(plays ? "playing" : "silent, one-to-one")")
         if plays {
-            soundEffectRenderer?.play(.raiseHand)
+            audio.play(.raiseHand)
         }
-    }
-    
-    /// Opens the existential so its instant can be kept: `any Clock` has no `now` to subtract.
-    private static func stopwatch(_ clock: some Clock<Duration>) -> () -> Duration {
-        let start = clock.now
-        return { start.duration(to: clock.now) }
     }
     
     /// Reached from the roster only; the dictionary claim keeps a member from being played twice.
