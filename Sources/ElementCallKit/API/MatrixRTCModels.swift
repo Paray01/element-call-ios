@@ -356,8 +356,8 @@ public nonisolated enum MatrixRTCFrameEncryptionState: Sendable, Hashable {
 public nonisolated enum MatrixRTCCallStatus: Sendable, Hashable {
     /// Our media is not up yet, and there is somebody to talk to.
     case connecting
-    /// A DM call waiting for its callee, while our own media gets going.
-    case calling(ring: MatrixRTCRingPhase, media: MatrixRTCMediaPhase)
+    /// A DM call waiting for `callee`, the user ID it rings, while our own media gets going.
+    case calling(callee: String, ring: MatrixRTCRingPhase, media: MatrixRTCMediaPhase)
     /// Media up and somebody to talk to. `since` is the zero of the call's duration and the moment
     /// the system call connected; it holds through a reconnect.
     case connected(since: Date, isDegraded: Bool)
@@ -366,7 +366,7 @@ public nonisolated enum MatrixRTCCallStatus: Sendable, Hashable {
     
     public var isDegraded: Bool {
         switch self {
-        case .calling(_, .connected(isDegraded: true)), .connected(_, isDegraded: true): true
+        case .calling(_, _, .connected(isDegraded: true)), .connected(_, isDegraded: true): true
         default: false
         }
     }

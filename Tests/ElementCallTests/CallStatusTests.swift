@@ -34,8 +34,9 @@ struct CallStatusTests {
     
     @Test
     func theCoresStatusIsMappedToDatesAndDurations() {
-        let ringing = MatrixRTCCallStatus(.calling(ring: .ringing(sentAtMs: 1500, lifetimeMs: 90000), media: .connected(degraded: true)))
-        #expect(ringing == .calling(ring: .ringing(sentAt: Date(timeIntervalSince1970: 1.5), lifetime: .seconds(90)),
+        let ringing = MatrixRTCCallStatus(.calling(callee: callee, ring: .ringing(sentAtMs: 1500, lifetimeMs: 90000), media: .connected(degraded: true)))
+        #expect(ringing == .calling(callee: callee,
+                                    ring: .ringing(sentAt: Date(timeIntervalSince1970: 1.5), lifetime: .seconds(90)),
                                     media: .connected(isDegraded: true)))
         #expect(ringing.isDegraded)
         
@@ -50,11 +51,11 @@ struct CallStatusTests {
     /// timer and the system call start at the pickup (030 R20, R31).
     @Test
     func aDirectCallConnectsAtThePickupAndEndsWithoutLeavingAgain() async throws {
-        let fixture = start(status: .calling(ring: .sending, media: .connecting))
-        #expect(fixture.controller.connection == .calling(.sending))
+        let fixture = start(status: .calling(callee: callee, ring: .sending, media: .connecting))
+        #expect(fixture.controller.connection == .calling(callee: callee, ring: .sending))
         
-        fixture.rtcCall.statusSubscription.push(.calling(ring: .ringing(sentAtMs: 10000, lifetimeMs: 90000), media: .connected(degraded: false)))
-        try await waitUntil { fixture.controller.connection == .calling(.ringing(sentAt: Date(timeIntervalSince1970: 10), lifetime: .seconds(90))) }
+        fixture.rtcCall.statusSubscription.push(.calling(callee: callee, ring: .ringing(sentAtMs: 10000, lifetimeMs: 90000), media: .connected(degraded: false)))
+        try await waitUntil { fixture.controller.connection == .calling(callee: callee, ring: .ringing(sentAt: Date(timeIntervalSince1970: 10), lifetime: .seconds(90))) }
         #expect(fixture.controller.connectedAt == nil)
         #expect(!fixture.system.requests.contains(.connected(roomID: roomID)))
         
@@ -76,7 +77,7 @@ struct CallStatusTests {
     
     @Test
     func aDeclineEndsTheCallUnconnected() async throws {
-        let fixture = start(status: .calling(ring: .sending, media: .connecting))
+        let fixture = start(status: .calling(callee: callee, ring: .sending, media: .connecting))
         
         fixture.rtcCall.statusSubscription.push(.ended(reason: .declined))
         try await waitUntil { fixture.controller.connection == .ended(.declined) }
@@ -96,7 +97,7 @@ struct CallStatusTests {
     
     @Test
     func hangingUpLeaves() async throws {
-        let fixture = start(status: .calling(ring: .sending, media: .connecting))
+        let fixture = start(status: .calling(callee: callee, ring: .sending, media: .connecting))
         
         fixture.controller.hangUp()
         try await waitUntil { fixture.controller.connection == .ended(.left) }
@@ -106,6 +107,7 @@ struct CallStatusTests {
     // MARK: - Helpers
     
     private let roomID = "!room:example.org"
+    private let callee = "@bob:example.org"
     
     private struct Fixture {
         let controller: ElementCallController

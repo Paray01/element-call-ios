@@ -21,6 +21,9 @@ ring out, or hangs up. `ElementCallConnection` gains `calling` and carries why t
 `MatrixRTCRoom.joinCall(kind:)` replaces `joinCall(notify:)`, and degradation is read from
 `MatrixRTCCall.status`, no longer from the media session.
 
+**`ElementCallIcon` gains `voiceCall`**, shown beside "Calling…" while a voice call rings. A host
+rendering its own icons maps it, to Compound's `voiceCallSolid`.
+
 ## 0.1.0-rc.10 - 2026-10-08
 
 **`MatrixRTCCall` is renamed `MatrixRTCMediaSession`, and `MatrixRTCElementCallCompat` is renamed

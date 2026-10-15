@@ -124,6 +124,8 @@ public nonisolated enum ElementCallIcon: Sendable, CaseIterable {
     case micOff
     case videoCall
     case videoCallOff
+    /// Beside "Calling…" in a voice call, where a video call shows ``videoCall``.
+    case voiceCall
     case switchCamera
     case shareScreen
     case volumeOn

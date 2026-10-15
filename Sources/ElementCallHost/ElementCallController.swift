@@ -16,8 +16,8 @@ public nonisolated enum ElementCallConnection: Equatable, Sendable {
     case idle
     case joining
     case connectingMedia
-    /// A DM call ringing its callee; not connected until they answer.
-    case calling(MatrixRTCRingPhase)
+    /// A DM call ringing `callee`, a user ID; not connected until they answer.
+    case calling(callee: String, ring: MatrixRTCRingPhase)
     case connected
     case ended(MatrixRTCEndReason)
     case failed(String)
@@ -593,8 +593,8 @@ public final class ElementCallController {
         switch status {
         case .connecting:
             connection = .connectingMedia
-        case .calling(let ring, _):
-            connection = .calling(ring)
+        case .calling(let callee, let ring, _):
+            connection = .calling(callee: callee, ring: ring)
         case .connected(let since, _):
             connection = .connected
             // Once: `since` holds through a reconnect, and so does the system's call.

@@ -56,8 +56,8 @@ nonisolated extension MatrixRTCCallStatus {
         switch status {
         case .connecting:
             self = .connecting
-        case .calling(let ring, let media):
-            self = .calling(ring: .init(ring), media: .init(media))
+        case .calling(let callee, let ring, let media):
+            self = .calling(callee: callee, ring: .init(ring), media: .init(media))
         case .connected(let sinceMs, let degraded):
             self = .connected(since: Date(milliseconds: sinceMs), isDegraded: degraded)
         case .ended(let reason):

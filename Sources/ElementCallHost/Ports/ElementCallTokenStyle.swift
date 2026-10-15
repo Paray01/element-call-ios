@@ -129,6 +129,7 @@ public nonisolated struct ElementCallTokenIcons: ElementCallIconRenderingProtoco
         case .micOff: icons.micOffSolid
         case .videoCall: icons.videoCallSolid
         case .videoCallOff: icons.videoCallOffSolid
+        case .voiceCall: icons.voiceCallSolid
         case .switchCamera: icons.switchCameraSolid
         case .shareScreen: icons.shareScreenSolid
         case .volumeOn: icons.volumeOnSolid
