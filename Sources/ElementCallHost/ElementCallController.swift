@@ -421,6 +421,23 @@ public final class ElementCallController {
         if let reason {
             log(.info, "audio route changed (\(reason.rawValue)): \(CallAudioSessionConfigurator.routeDescription), offering \(route.outputs.map { "\($0.kind)" }), current \(route.current.map { "\($0.kind)" } ?? "none")")
         }
+        updateProximityMonitoring()
+    }
+    
+    /// A call on the earpiece is held to the ear, so the screen goes dark and ignores touches there,
+    /// or a cheek hangs up or mutes. Element X's web call screen does the same. Not on any other
+    /// output, where the phone is looked at.
+    static func isProximityMonitored(isInCall: Bool, output: CallAudioOutput?) -> Bool {
+        isInCall && output?.kind == .receiver
+    }
+    
+    /// Only on a change: the sensor's state is the device's, and other code may own it between
+    /// calls.
+    private func updateProximityMonitoring() {
+        let isMonitored = Self.isProximityMonitored(isInCall: isInCall, output: audioOutput)
+        guard UIDevice.current.isProximityMonitoringEnabled != isMonitored else { return }
+        UIDevice.current.isProximityMonitoringEnabled = isMonitored
+        log(.info, "proximity monitoring \(isMonitored ? "on" : "off")")
     }
     
     // MARK: - System audio session
@@ -447,6 +464,7 @@ public final class ElementCallController {
         if let callData, !callData.isAudioCall, CallAudioSessionConfigurator.isBuiltInReceiver {
             setLoudspeaker(true)
         }
+        refreshAudioRoute()
     }
     
     // MARK: - Private
@@ -708,6 +726,7 @@ public final class ElementCallController {
             connection = .ended(reason)
         }
         connectedAt = nil
+        updateProximityMonitoring()
         // The screen closes now (030 R13), and the audio after it: a decline's or a timeout's sound
         // plays to its end first (R25), and the system call ends with it, since ending that is
         // what takes the audio session away.
