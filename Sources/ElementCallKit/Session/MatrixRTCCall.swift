@@ -11,7 +11,7 @@ import Observation
 
 /// Our participation in a room's call: membership in, media attached separately.
 ///
-/// You are in the call as soon as ``MatrixRTCRoom/joinCall(notify:)`` returned; media is attached with
+/// You are in the call as soon as ``MatrixRTCRoom/joinCall(kind:)`` returned; media is attached with
 /// ``connectMedia()``. Teardown order matters: disconnect media → leave → shut the room down.
 @MainActor
 @Observable
@@ -27,6 +27,13 @@ public final class MatrixRTCCall {
         members.count
     }
     
+    /// Where the call is, as the core sees it. In a DM it is also how the call ends without us: the
+    /// core leaves by itself on a decline, a ring nobody answered or the other side hanging up.
+    public private(set) var status: MatrixRTCCallStatus
+    /// Every change of ``status``, starting after the value it had at the join.
+    public let statusUpdates: AsyncStream<MatrixRTCCallStatus>
+    @ObservationIgnored private let statusContinuation: AsyncStream<MatrixRTCCallStatus>.Continuation
+    
     public private(set) var mediaSession: MatrixRTCMediaSession?
     
     /// The protocol rather than the class so a test can stand in for the membership; only
@@ -34,12 +41,15 @@ public final class MatrixRTCCall {
     @ObservationIgnored private let rtcCall: any RtcCallProtocol
     @ObservationIgnored private var hasLeft = false
     @ObservationIgnored private var membershipReader: Task<Void, Never>?
+    @ObservationIgnored private var statusReader: Task<Void, Never>?
     
     init(rtcCall: any RtcCallProtocol) {
         self.rtcCall = rtcCall
         roomID = rtcCall.roomId()
         slotID = rtcCall.slotId()
         localMemberID = rtcCall.memberId()
+        status = MatrixRTCCallStatus(rtcCall.status())
+        (statusUpdates, statusContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
     
     /// Reads the roster until the room is shut down. Each `next()` waits for a change, the first
@@ -53,11 +63,23 @@ public final class MatrixRTCCall {
                 self?.updateMembers(snapshot.map(MatrixRTCMembership.init))
             }
         }
+        // The subscription answers the current status first, which `init` already read.
+        statusReader = Task { [weak self] in
+            let subscription = rtcCall.subscribeStatus()
+            while let status = await subscription.next() {
+                guard !Task.isCancelled else { return }
+                self?.updateStatus(MatrixRTCCallStatus(status))
+            }
+            self?.statusContinuation.finish()
+        }
     }
     
     func stop() {
         membershipReader?.cancel()
         membershipReader = nil
+        statusReader?.cancel()
+        statusReader = nil
+        statusContinuation.finish()
     }
     
     /// Attaches media. The core takes the transport from the join and the account from the backend,
@@ -131,6 +153,13 @@ public final class MatrixRTCCall {
             MatrixRTCLog.warning("Failed to lower hand in \(roomID)/\(slotID): \(error)")
             throw MatrixRTCError.ffi("\(error)")
         }
+    }
+    
+    private func updateStatus(_ status: MatrixRTCCallStatus) {
+        guard status != self.status else { return }
+        MatrixRTCLog.info("\(roomID)/\(slotID) is \(status)")
+        self.status = status
+        statusContinuation.yield(status)
     }
     
     private func updateMembers(_ members: [MatrixRTCMembership]) {

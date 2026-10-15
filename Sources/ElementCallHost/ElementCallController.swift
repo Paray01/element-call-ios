@@ -16,8 +16,10 @@ public nonisolated enum ElementCallConnection: Equatable, Sendable {
     case idle
     case joining
     case connectingMedia
+    /// A DM call ringing its callee; not connected until they answer.
+    case calling(MatrixRTCRingPhase)
     case connected
-    case ended
+    case ended(MatrixRTCEndReason)
     case failed(String)
 }
 
@@ -130,7 +132,7 @@ public final class ElementCallController {
     
     public var isInCall: Bool {
         switch connection {
-        case .joining, .connectingMedia, .connected: true
+        case .joining, .connectingMedia, .calling, .connected: true
         default: false
         }
     }
@@ -145,7 +147,7 @@ public final class ElementCallController {
     private let system: any ElementCallSystemProvidingProtocol
     private let logger: (any ElementCallLoggingProtocol)?
     private let actionsSubject = PassthroughSubject<ElementCallControllerAction, Never>()
-    private var eventsTask: Task<Void, Never>?
+    private var statusTask: Task<Void, Never>?
     private var routeObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
     
@@ -232,7 +234,7 @@ public final class ElementCallController {
     }
     
     public func hangUp() {
-        Task { await endCall(leave: true) }
+        Task { await endCall(.left) }
     }
     
     /// The view where the system anchors the Picture in Picture shrink animation. The host places it
@@ -459,7 +461,8 @@ public final class ElementCallController {
         log(.info, "joining \(room.roomID)")
         guard let rtcCall = await joinCall(for: callData, room: room) else { return }
         
-        connection = .connectingMedia
+        follow(rtcCall, roomID: room.roomID)
+        
         let call: MatrixRTCMediaSession
         do {
             call = try await rtcCall.connectMedia()
@@ -516,7 +519,7 @@ public final class ElementCallController {
         
         let rtcCall: MatrixRTCCall
         do {
-            rtcCall = try await rtcRoom.joinCall(notify: notify(for: callData, room: room))
+            rtcCall = try await rtcRoom.joinCall(kind: Self.kind(for: callData, isDirect: room.isDirect))
         } catch {
             fail("Join failed: \(error)")
             return nil
@@ -529,7 +532,8 @@ public final class ElementCallController {
         return rtcCall
     }
     
-    /// Microphone, then camera for a video call. The call counts as connected once the microphone is up.
+    /// Microphone, then camera for a video call. Whether the call is connected is the core's to
+    /// say, through the status: our media being up is not it, in a DM still ringing.
     private func publishMedia(on call: MatrixRTCMediaSession,
                               rtcCall: MatrixRTCCall,
                               room: any ElementCallRoomContextProtocol) async {
@@ -561,13 +565,7 @@ public final class ElementCallController {
             await abandon(rtcCall: rtcCall, call: call, roomID: room.roomID)
             return
         }
-        log(.info, "connected as \(call.localMemberID)")
-        
-        eventsTask = Task { [weak self] in
-            for await event in call.events {
-                self?.handle(event)
-            }
-        }
+        log(.info, "publishing as \(call.localMemberID)")
         
         if pendingCameraEnabled, await requestCameraAccess(), !Task.isCancelled {
             try? await call.setCameraEnabled(true)
@@ -576,27 +574,45 @@ public final class ElementCallController {
             await abandon(rtcCall: rtcCall, call: call, roomID: room.roomID)
             return
         }
-        
-        connection = .connected
-        connectedAt = .now
         refreshAudioRoute()
-        system.reportConnected(roomID: room.roomID)
     }
     
-    private func handle(_ event: MatrixRTCCallEvent) {
-        // Everything else this switch used to carry existed only to recompute the spotlight, which
-        // the model now ranks and damps for us.
-        guard case .ended = event else { return }
-        // From a different task than the event collector: teardown cancels that task.
-        Task { await endCall(leave: false) }
+    /// The connection follows the core from the join on.
+    func follow(_ rtcCall: MatrixRTCCall, roomID: String) {
+        apply(rtcCall.status, roomID: roomID)
+        statusTask = Task { [weak self] in
+            for await status in rtcCall.statusUpdates {
+                self?.apply(status, roomID: roomID)
+            }
+        }
     }
     
-    /// Only when *starting* a call; joining one someone else started happens quietly. A direct chat
-    /// rings, a group call is an invitation rather than a summons.
-    private func notify(for callData: ElementCallData, room: any ElementCallRoomContextProtocol) -> MatrixRTCNotify? {
-        guard callData.isStartingCall else { return nil }
-        return MatrixRTCNotify(kind: room.isDirect ? .ring : .notification,
-                               intent: callData.isAudioCall ? .audio : .video)
+    /// A failure is ours and is kept.
+    private func apply(_ status: MatrixRTCCallStatus, roomID: String) {
+        guard isInCall else { return }
+        switch status {
+        case .connecting:
+            connection = .connectingMedia
+        case .calling(let ring, _):
+            connection = .calling(ring)
+        case .connected(let since, _):
+            connection = .connected
+            // Once: `since` holds through a reconnect, and so does the system's call.
+            if connectedAt == nil {
+                connectedAt = since
+                system.reportConnected(roomID: roomID)
+            }
+        case .ended(let reason):
+            // From a different task than the status reader: teardown cancels that task.
+            Task { await endCall(reason) }
+        }
+    }
+    
+    /// A direct chat rings, a group call is an invitation rather than a summons. Either only when
+    /// *starting* a call; joining one someone else started happens quietly.
+    static func kind(for callData: ElementCallData, isDirect: Bool) -> MatrixRTCCallKind {
+        let intent: MatrixRTCCallIntent? = callData.isStartingCall ? (callData.isAudioCall ? .audio : .video) : nil
+        return isDirect ? .direct(ring: intent) : .group(notify: intent)
     }
     
     private static func describe(_ error: Error) -> String {
@@ -633,7 +649,7 @@ public final class ElementCallController {
     private func fail(_ message: String) {
         log(.error, message)
         connection = .failed(message)
-        Task { await endCall(leave: true) }
+        Task { await endCall(.left) }
     }
     
     /// Tears down what a join produced after the call was ended under it. Leaving is idempotent, so a
@@ -658,17 +674,18 @@ public final class ElementCallController {
         await rtcRoom?.shutdown()
     }
     
-    private func endCall(leave: Bool) async {
+    /// `.left` is us leaving. Any other reason is the core's, which has left already.
+    private func endCall(_ reason: MatrixRTCEndReason) async {
         guard let roomID = room?.roomID else { return }
-        log(.info, "ending call in \(roomID) (leave=\(leave))")
+        log(.info, "ending call in \(roomID): \(reason)")
         runTask?.cancel()
         runTask = nil
-        eventsTask?.cancel()
-        eventsTask = nil
+        statusTask?.cancel()
+        statusTask = nil
         pictureInPicture.unbind()
         
         if let rtcCall {
-            if leave {
+            if reason == .left {
                 await rtcCall.leave()
             } else {
                 await rtcCall.mediaSession?.disconnect()
@@ -694,7 +711,7 @@ public final class ElementCallController {
         if case .failed = connection {
             // Keep the failure visible until the screen is dismissed.
         } else {
-            connection = .ended
+            connection = .ended(reason)
         }
         connectedAt = nil
         actionsSubject.send(.ended)

@@ -15,6 +15,12 @@ version will actually read it.
 `.raisedHand`. A host theme that draws its own speaking ring can do the same for a raised hand by
 implementing `raisedHandBorder(in:)`; the default is design's.
 
+**`ElementCallData.isStartingCall` must be the user's choice to call**, never "the room has no call
+yet": in a direct chat it now rings, and the core ends the call when the callee declines, lets it
+ring out, or hangs up. `ElementCallConnection` gains `calling` and carries why the call `ended`;
+`MatrixRTCRoom.joinCall(kind:)` replaces `joinCall(notify:)`, and degradation is read from
+`MatrixRTCCall.status`, no longer from the media session.
+
 ## 0.1.0-rc.10 - 2026-10-08
 
 **`MatrixRTCCall` is renamed `MatrixRTCMediaSession`, and `MatrixRTCElementCallCompat` is renamed

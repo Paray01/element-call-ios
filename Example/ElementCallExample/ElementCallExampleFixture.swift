@@ -225,7 +225,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .failed:
             return .connecting(.failed("Homeserver offers no LiveKit transport"))
         case .ended:
-            return .connecting(.ended)
+            return .connecting(.ended(.left))
         }
     }
     

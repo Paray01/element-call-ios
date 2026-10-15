@@ -455,6 +455,8 @@ struct ElementCallView: View {
             Text("Joining…").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .connectingMedia:
             Text("Connecting…").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
+        case .calling:
+            Text("Calling…").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .connected:
             if let connectedAt = context.viewState.connectedAt {
                 Text(connectedAt, style: .timer)

@@ -1,0 +1,138 @@
+//
+// Copyright 2026 Element Creations Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+// Please see LICENSE files in the repository root for full details.
+//
+
+// `@testable` for `MatrixRTCCall`'s internal initialiser and the controller's seams.
+@testable import ElementCallHost
+@testable import ElementCallKit
+import Foundation
+import MatrixRtc
+import Testing
+
+/// What a join asks the core for, and the controller following the call's status from there:
+/// connected at the core's moment rather than when our own media is up, and ended by the core
+/// without leaving a second time.
+@Suite("Call status")
+@MainActor
+struct CallStatusTests {
+    private let starting = ElementCallData(isAudioCall: false, isStartingCall: true)
+    
+    @Test
+    func onlyStartingADirectCallRings() {
+        let startingAudio = ElementCallData(isAudioCall: true, isStartingCall: true)
+        let joining = ElementCallData(isAudioCall: false, isStartingCall: false)
+        
+        #expect(ElementCallController.kind(for: starting, isDirect: true) == .direct(ring: .video))
+        #expect(ElementCallController.kind(for: startingAudio, isDirect: true) == .direct(ring: .audio))
+        #expect(ElementCallController.kind(for: joining, isDirect: true) == .direct(ring: nil))
+        #expect(ElementCallController.kind(for: starting, isDirect: false) == .group(notify: .video))
+        #expect(ElementCallController.kind(for: joining, isDirect: false) == .group(notify: nil))
+    }
+    
+    @Test
+    func theCoresStatusIsMappedToDatesAndDurations() {
+        let ringing = MatrixRTCCallStatus(.calling(ring: .ringing(sentAtMs: 1500, lifetimeMs: 90000), media: .connected(degraded: true)))
+        #expect(ringing == .calling(ring: .ringing(sentAt: Date(timeIntervalSince1970: 1.5), lifetime: .seconds(90)),
+                                    media: .connected(isDegraded: true)))
+        #expect(ringing.isDegraded)
+        
+        let connected = MatrixRTCCallStatus(.connected(sinceMs: 2000, degraded: false))
+        #expect(connected == .connected(since: Date(timeIntervalSince1970: 2), isDegraded: false))
+        #expect(!connected.isDegraded)
+        
+        #expect(MatrixRTCCallStatus(.ended(reason: .connectionClosed(message: "gone"))) == .ended(.connectionClosed(message: "gone")))
+    }
+    
+    /// Our media is up while the callee's phone still rings, and none of that is connected: the
+    /// timer and the system call start at the pickup (030 R20, R31).
+    @Test
+    func aDirectCallConnectsAtThePickupAndEndsWithoutLeavingAgain() async throws {
+        let fixture = start(status: .calling(ring: .sending, media: .connecting))
+        #expect(fixture.controller.connection == .calling(.sending))
+        
+        fixture.rtcCall.statusSubscription.push(.calling(ring: .ringing(sentAtMs: 10000, lifetimeMs: 90000), media: .connected(degraded: false)))
+        try await waitUntil { fixture.controller.connection == .calling(.ringing(sentAt: Date(timeIntervalSince1970: 10), lifetime: .seconds(90))) }
+        #expect(fixture.controller.connectedAt == nil)
+        #expect(!fixture.system.requests.contains(.connected(roomID: roomID)))
+        
+        fixture.rtcCall.statusSubscription.push(.connected(sinceMs: 20000, degraded: false))
+        try await waitUntil { fixture.controller.connection == .connected }
+        #expect(fixture.controller.connectedAt == Date(timeIntervalSince1970: 20))
+        
+        // A reconnect keeps the call's duration and does not connect the system call twice.
+        fixture.rtcCall.statusSubscription.push(.connected(sinceMs: 20000, degraded: true))
+        try await waitUntil { fixture.call.status.isDegraded }
+        #expect(fixture.controller.connectedAt == Date(timeIntervalSince1970: 20))
+        #expect(fixture.system.requests.count { $0 == .connected(roomID: roomID) } == 1)
+        
+        fixture.rtcCall.statusSubscription.push(.ended(reason: .othersLeft))
+        try await waitUntil { fixture.controller.connection == .ended(.othersLeft) }
+        #expect(fixture.rtcCall.leaveCount == 0)
+        #expect(fixture.system.requests.last == .end(roomID: roomID))
+    }
+    
+    @Test
+    func aDeclineEndsTheCallUnconnected() async throws {
+        let fixture = start(status: .calling(ring: .sending, media: .connecting))
+        
+        fixture.rtcCall.statusSubscription.push(.ended(reason: .declined))
+        try await waitUntil { fixture.controller.connection == .ended(.declined) }
+        #expect(fixture.rtcCall.leaveCount == 0)
+        #expect(!fixture.system.requests.contains(.connected(roomID: roomID)))
+    }
+    
+    @Test
+    func aGroupCallConnectsWithOurMedia() async throws {
+        let fixture = start(status: .connecting)
+        #expect(fixture.controller.connection == .connectingMedia)
+        
+        fixture.rtcCall.statusSubscription.push(.connected(sinceMs: 5000, degraded: false))
+        try await waitUntil { fixture.controller.connection == .connected }
+        #expect(fixture.system.requests.contains(.connected(roomID: roomID)))
+    }
+    
+    @Test
+    func hangingUpLeaves() async throws {
+        let fixture = start(status: .calling(ring: .sending, media: .connecting))
+        
+        fixture.controller.hangUp()
+        try await waitUntil { fixture.controller.connection == .ended(.left) }
+        #expect(fixture.rtcCall.leaveCount == 1)
+    }
+    
+    // MARK: - Helpers
+    
+    private let roomID = "!room:example.org"
+    
+    private struct Fixture {
+        let controller: ElementCallController
+        let system: ElementCallFakeSystem
+        let rtcCall: FakeRtcCall
+        let call: MatrixRTCCall
+    }
+    
+    private func start(status: FfiCallStatus) -> Fixture {
+        let system = ElementCallFakeSystem()
+        let controller = ElementCallController(rtcClient: MatrixRTCClient(transport: ElementCallFakeTransport()),
+                                               system: system,
+                                               options: ElementCallOptions(),
+                                               style: .stock,
+                                               logger: nil)
+        let rtcCall = FakeRtcCall(status: status)
+        let call = MatrixRTCCall(rtcCall: rtcCall)
+        controller.setPreviewState(callData: starting, room: ElementCallFakeRoom(), connection: .joining, rtcCall: call)
+        call.start()
+        controller.follow(call, roomID: roomID)
+        return Fixture(controller: controller, system: system, rtcCall: rtcCall, call: call)
+    }
+    
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        for _ in 0..<1000 where !condition() {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(condition())
+    }
+}

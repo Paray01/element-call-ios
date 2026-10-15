@@ -90,8 +90,6 @@ public final class MatrixRTCMediaSession {
     private var pendingScreenShare: Bool?
     @ObservationIgnored private var screenShareIntentDeadline: Task<Void, Never>?
     private static let screenShareIntentTimeout = Duration.seconds(10)
-    public private(set) var isMediaDegraded = false
-    public private(set) var hasEnded = false
     
     /// Every core event, after the call itself reacted to it.
     public let events: AsyncStream<MatrixRTCCallEvent>
@@ -817,16 +815,14 @@ public final class MatrixRTCMediaSession {
         while !Task.isCancelled, let roster = await mediaSession.nextRoster() {
             apply(roster)
         }
-        // Three pumps can now observe the session ending and only `pumpEvents` yields `.ended`.
-        // Saying so distinguishes a stage frozen on its last roster from one nobody is updating.
-        MatrixRTCLog.debug("Tile roster pump stopped (hasEnded: \(hasEnded))")
+        MatrixRTCLog.debug("Tile roster pump stopped")
     }
     
     private func pumpLocalState() async {
         while !Task.isCancelled, let state = await mediaSession.nextLocalState() {
             apply(state)
         }
-        MatrixRTCLog.debug("Local state pump stopped (hasEnded: \(hasEnded))")
+        MatrixRTCLog.debug("Local state pump stopped")
     }
     
     private func apply(_ roster: FfiTileRoster) {
@@ -851,7 +847,7 @@ public final class MatrixRTCMediaSession {
     
     private func pumpEvents() async {
         while !Task.isCancelled, let ffiEvent = await mediaSession.nextEvent() {
-            let event = MatrixRTCCallEvent(ffiEvent)
+            guard let event = MatrixRTCCallEvent(ffiEvent) else { continue }
             handle(event)
             eventsContinuation.yield(event)
         }
@@ -869,20 +865,12 @@ public final class MatrixRTCMediaSession {
             MatrixRTCLog.warning("Key for \(memberID) discarded: \(reason)")
         case .keyImported(let memberID, let keyIndex):
             MatrixRTCLog.info("Key index \(keyIndex) imported for \(memberID)")
-        case .mediaConnectionDegraded(let degraded):
-            isMediaDegraded = degraded
         case .participantJoined(let memberID, _, let participantCount):
             playJoinLeaveSound(.join, for: memberID, participantCount: participantCount)
         case .participantLeft(let memberID, let participantCount):
             playJoinLeaveSound(.leave, for: memberID, participantCount: participantCount)
         case .handRaised(let memberID, _):
             playRaisedHandSound(for: memberID)
-        case .ended(let reason):
-            MatrixRTCLog.info("Media session ended: \(reason)")
-            joinLeaveSoundPolicy.silence()
-            hasEnded = true
-            playbackSinks.values.forEach { $0.stop() }
-            playbackSinks.removeAll()
         default:
             break
         }

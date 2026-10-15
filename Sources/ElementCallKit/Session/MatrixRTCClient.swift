@@ -115,16 +115,16 @@ public final class MatrixRTCRoom {
     
     /// Joins the room's call. No slot is named: the core joins the room-wide one, and picks the
     /// transport from what the homeserver advertises, failing the join when it advertises none.
-    public func joinCall(notify: MatrixRTCNotify?) async throws -> MatrixRTCCall {
+    public func joinCall(kind: MatrixRTCCallKind) async throws -> MatrixRTCCall {
         guard !isShutDown else { throw MatrixRTCError.ffi("\(roomID) is shut down") }
         let rtcCall: RtcCall
         do {
             rtcCall = try await rtcRoom.joinCall(params: FfiJoinSessionParams(applicationSlotId: nil,
                                                                               transport: .advertised,
+                                                                              kind: kind.ffi,
                                                                               keepAliveTimeoutMs: Self.keepAliveTimeoutMs,
                                                                               stickyDurationMs: nil, // The core owns the membership lifetime.
-                                                                              encryptionConfig: nil, // Follow whatever the slot prescribes.
-                                                                              notify: notify?.ffi))
+                                                                              encryptionConfig: nil)) // Follow whatever the slot prescribes.
         } catch MatrixRtcFfiError.SlotClosed(let message) {
             MatrixRTCLog.error("Join refused in \(roomID), the slot is closed: \(message)")
             throw MatrixRTCError.slotClosed(message)

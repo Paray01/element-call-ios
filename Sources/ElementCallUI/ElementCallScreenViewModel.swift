@@ -334,7 +334,7 @@ public final class ElementCallScreenViewModel {
         call.setRankingThreshold(ElementCallSmallCallLayout.rankingThreshold)
         state.isFrontCamera = call.isFrontCamera
         state.isScreenSharing = call.isScreenSharing
-        state.isMediaDegraded = call.isMediaDegraded
+        state.isMediaDegraded = controller.rtcCall?.status.isDegraded ?? false
         
         state.tiles = Self.tiles(roster: call.tiles,
                                  own: call.ownTile,
