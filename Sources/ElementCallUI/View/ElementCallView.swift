@@ -530,6 +530,7 @@ struct ElementCallView: View {
                              floatingInsets: floatingInsets(isLandscape: isLandscape),
                              extendsUnderSideSafeAreas: isFullBleed,
                              ownCorner: context.ownTileCorner,
+                             isDirect: state.isDirect,
                              canSwitchCamera: state.canSwitchCamera,
                              isFrontCamera: state.isFrontCamera,
                              scrollRequest: context.scrollRequest,

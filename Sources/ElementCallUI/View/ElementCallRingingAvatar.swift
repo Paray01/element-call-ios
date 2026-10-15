@@ -11,8 +11,8 @@ import SwiftUI
 /// The person a direct call is ringing, large and centred on the stage until they answer (030 R15).
 ///
 /// Drawn as a one-to-one call draws the other person with their camera off: the host's `.full`
-/// avatar at its own size, centred on the whole screen. So when they answer without video nothing
-/// moves, and the change to the call is the avatar handing over to an identical one (R21).
+/// avatar at the large tile's size, centred on the whole screen. So when they answer without video
+/// nothing moves, and the change to the call is the avatar handing over to an identical one (R21).
 ///
 /// Not a tile, because nobody has joined yet: it takes no touches, so a tap or a double tap on it is
 /// the stage's, which does nothing while ringing (R38).
@@ -31,6 +31,7 @@ struct ElementCallRingingAvatar: View {
                              displayName: name,
                              avatarURL: callee.avatarURL,
                              size: .full)
+            .scaledAvatar(to: ElementCallTileView.largeAvatarDiameter)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea()
             .allowsHitTesting(false)

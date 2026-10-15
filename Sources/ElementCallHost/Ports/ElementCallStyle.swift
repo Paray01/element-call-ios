@@ -165,8 +165,9 @@ public extension ElementCallIconRenderingProtocol {
 public nonisolated enum ElementCallAvatarSize: Sendable {
     /// Not requested by the built-in stage.
     case thumbnail
-    /// Every tile, and the Picture in Picture placeholder. A grid tile draws it scaled down to
-    /// 52 pt, so it grows into the spotlight or full screen as one picture.
+    /// Every tile, and the Picture in Picture placeholder. The stage scales it to 140 pt on a large
+    /// tile and 52 pt in the grid, so it grows from one to the other as one picture. Render it at
+    /// 140 pt, or a photo is drawn larger than it was loaded.
     case full
 }
 

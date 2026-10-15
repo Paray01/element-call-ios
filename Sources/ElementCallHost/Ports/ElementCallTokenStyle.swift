@@ -203,7 +203,7 @@ public nonisolated struct ElementCallTokenAvatars: ElementCallAvatarRenderingPro
     }
     
     public func avatar(userID: String, displayName: String?, avatarURL: URL?, size: ElementCallAvatarSize) -> AnyView {
-        let diameter: CGFloat = size == .thumbnail ? 52 : 96
+        let diameter: CGFloat = size == .thumbnail ? 52 : 140
         let name = displayName ?? userID
         let initial = name.trimmingCharacters(in: .whitespaces)
             .drop { !$0.isLetter && !$0.isNumber }
