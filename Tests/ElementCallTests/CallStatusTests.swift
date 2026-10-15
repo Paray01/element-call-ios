@@ -72,7 +72,7 @@ struct CallStatusTests {
         fixture.rtcCall.statusSubscription.push(.ended(reason: .othersLeft))
         try await waitUntil { fixture.controller.connection == .ended(.othersLeft) }
         #expect(fixture.rtcCall.leaveCount == 0)
-        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID) }
+        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID, reason: .remoteEnded) }
     }
     
     @Test
@@ -105,10 +105,10 @@ struct CallStatusTests {
         fixture.rtcCall.statusSubscription.push(.ended(reason: .declined))
         try await waitUntil { fixture.controller.connection == .ended(.declined) }
         try await Task.sleep(for: .milliseconds(50))
-        #expect(!fixture.system.requests.contains(.end(roomID: roomID)))
+        #expect(!fixture.system.requests.contains(.end(roomID: roomID, reason: .remoteEnded)))
         
         clock.advance(by: Self.endSoundLength)
-        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID) }
+        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID, reason: .remoteEnded) }
     }
     
     @Test
@@ -119,7 +119,42 @@ struct CallStatusTests {
         try await waitUntil { fixture.controller.connection == .ended(.left) }
         #expect(fixture.rtcCall.leaveCount == 1)
         // Nothing to play out, so nothing to wait for.
-        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID) }
+        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID, reason: .local) }
+    }
+    
+    /// The system hears only a hang-up as ours; the other side's ends and the call's own failures
+    /// are reported as what they were (030 R32).
+    @Test
+    func theSystemIsToldWhoEndedTheCall() {
+        #expect(ElementCallController.systemReason(for: .left) == .local)
+        #expect(ElementCallController.systemReason(for: .declined) == .remoteEnded)
+        #expect(ElementCallController.systemReason(for: .othersLeft) == .remoteEnded)
+        #expect(ElementCallController.systemReason(for: .empty) == .remoteEnded)
+        #expect(ElementCallController.systemReason(for: .slotClosed) == .remoteEnded)
+        #expect(ElementCallController.systemReason(for: .unanswered) == .unanswered)
+        #expect(ElementCallController.systemReason(for: .ringNotSent) == .failed)
+        #expect(ElementCallController.systemReason(for: .connectionClosed(message: "gone")) == .failed)
+    }
+    
+    /// A failure we showed is ended by our own leave, and is still a failure to the system.
+    @Test
+    func aFailedCallIsReportedFailed() async throws {
+        let fixture = start(status: .connecting)
+        fixture.controller.setPreviewState(callData: starting, room: ElementCallFakeRoom(), connection: .failed("Media failed"), rtcCall: fixture.call)
+        
+        fixture.controller.hangUp()
+        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID, reason: .failed) }
+    }
+    
+    @Test
+    func aRingNobodyAnsweredIsReportedUnanswered() async throws {
+        let fixture = start(status: .calling(callee: callee, ring: .sending, media: .connecting))
+        
+        fixture.rtcCall.statusSubscription.push(.ended(reason: .unanswered))
+        try await waitUntil { fixture.controller.connection == .ended(.unanswered) }
+        // The timeout's sound is a second of silence here, on the real clock.
+        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID, reason: .unanswered) }
+        #expect(fixture.rtcCall.leaveCount == 0)
     }
     
     // MARK: - Helpers

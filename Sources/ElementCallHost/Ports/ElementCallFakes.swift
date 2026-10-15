@@ -126,7 +126,7 @@ public final class ElementCallFakeSystem: ElementCallSystemProvidingProtocol {
     public enum Request: Sendable, Equatable {
         case start(roomID: String, displayName: String, isVideo: Bool)
         case connected(roomID: String)
-        case end(roomID: String)
+        case end(roomID: String, reason: ElementCallEndReason)
         case microphone(enabled: Bool, roomID: String)
     }
     
@@ -151,8 +151,8 @@ public final class ElementCallFakeSystem: ElementCallSystemProvidingProtocol {
         requests.append(.connected(roomID: roomID))
     }
     
-    public func endCall(roomID: String) {
-        requests.append(.end(roomID: roomID))
+    public func endCall(roomID: String, reason: ElementCallEndReason) {
+        requests.append(.end(roomID: roomID, reason: reason))
     }
     
     public func setMicrophoneEnabled(_ enabled: Bool, roomID: String) {

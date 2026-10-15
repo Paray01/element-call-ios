@@ -629,6 +629,17 @@ public final class ElementCallController {
         }
     }
     
+    /// How the system hears the end of the call: the other side's doing for a decline and a departure
+    /// (030 R32), and the call's own for what went wrong.
+    static func systemReason(for reason: MatrixRTCEndReason) -> ElementCallEndReason {
+        switch reason {
+        case .left: .local
+        case .declined, .othersLeft, .empty, .slotClosed: .remoteEnded
+        case .unanswered: .unanswered
+        case .ringNotSent, .connectionClosed: .failed
+        }
+    }
+    
     /// A direct chat rings, a group call is an invitation rather than a summons. Either only when
     /// *starting* a call; joining one someone else started happens quietly.
     static func kind(for callData: ElementCallData, isDirect: Bool) -> MatrixRTCCallKind {
@@ -707,6 +718,13 @@ public final class ElementCallController {
         pictureInPicture.unbind()
         
         let endedCall = rtcCall
+        // Read before the connection is overwritten below: a failure we showed is a failure to the
+        // system too, whatever the leave that followed it.
+        let systemReason: ElementCallEndReason = if case .failed = connection {
+            .failed
+        } else {
+            Self.systemReason(for: reason)
+        }
         if let rtcCall {
             if reason == .left {
                 await rtcCall.leave()
@@ -732,7 +750,7 @@ public final class ElementCallController {
         // what takes the audio session away.
         actionsSubject.send(.ended)
         await endedCall?.releaseAudio()
-        system.endCall(roomID: roomID)
+        system.endCall(roomID: roomID, reason: systemReason)
         // Paired with the activation in `activateAudio` through the same predicate, so the two
         // cannot disagree about which platforms they apply to and leave the session up. Not under
         // a call started while the sound played out, which has the session now.
