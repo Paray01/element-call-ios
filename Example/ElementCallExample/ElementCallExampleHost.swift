@@ -121,6 +121,9 @@ final class ElementCallExampleHost {
         case .ringing(let ringing):
             openRinging(ringing, fixture: fixture)
             
+        case .played(let scenario):
+            openPlayed(scenario, fixture: fixture)
+            
         case .connecting(let connection):
             let controller = makeController(connection: connection, room: ElementCallFakeRoom())
             // The real host contract, and the only place in this repository it is exercised: the
@@ -159,6 +162,32 @@ final class ElementCallExampleHost {
     }
     
     // MARK: - Private
+    
+    /// A direct call with Bob whose tiles a scenario plays, on the real screen, as a scenario row is.
+    private func openPlayed(_ text: String, fixture: ElementCallExampleFixture) {
+        do {
+            let playback = try ElementCallExampleScenarioPlayback(scenario: MatrixRTCScenario.parse(text, name: fixture.rawValue),
+                                                                  localMemberID: ElementCallExampleRinging.localMemberID)
+            let room = ElementCallFakeRoom(displayName: "Bob",
+                                           isDirect: true,
+                                           memberProfiles: [ElementCallExampleRinging.callee: ElementCallMemberProfile(userID: ElementCallExampleRinging.callee,
+                                                                                                                       displayName: "Bob",
+                                                                                                                       avatarURL: nil)])
+            let controller = ElementCallController.fake(connection: .connected, room: room, isAudioCall: true, connectedAt: .now, call: playback.player.call)
+            controller.actions
+                .sink { [weak self] action in self?.handle(action) }
+                .store(in: &cancellables)
+            let viewModel = ElementCallScreenViewModel(controller: controller)
+            playback.attach(context: viewModel.context, controller: controller)
+            session = Session(fixture: fixture, presentation: .scripted(viewModel, playback), controller: controller)
+            Task {
+                await playback.start()
+                playback.play()
+            }
+        } catch {
+            notice = "Fixture \(fixture.rawValue) failed to load: \(error)"
+        }
+    }
     
     /// Running only while a ringing fixture is up.
     private var ringingTask: Task<Void, Never>?
