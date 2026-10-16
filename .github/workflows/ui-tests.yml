@@ -1,0 +1,169 @@
+name: UI Tests
+
+# Nightly rather than on every push. Sharded across four runners on every pull request, these held
+# five Macs per push out of a pool the whole company shares, and most of each shard was fixed cost:
+# on a measured run, a minute of setup, two and a half of building and about nine with nothing in the
+# log between the build and the first test, against seven minutes of tests. One job pays that once.
+#
+# Not on pull requests, so a change to a gesture is checked by dispatching this on its branch. Pushes
+# to release/** run it too, but the release gates on Tests only (scripts/release.sh).
+on:
+  schedule:
+    # Weekdays at 04:00 UTC, after element-x-ios's nightly Mac jobs, which all start at 02:00.
+    - cron: '0 4 * * 1-5'
+  workflow_dispatch:
+  push:
+    branches: [release/**]
+
+permissions: {}
+
+env:
+  # The same pinned device as tests.yml and record-snapshots.yml, and as
+  # Tests/ElementCallTests/Support/SnapshotEnvironment.swift. Change all four together.
+  XCODE_APP: /Applications/Xcode_26.5.app
+  SIMULATOR_NAME: iPhone SE (3rd generation)
+  SIMULATOR_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-5
+  SIMULATOR_LABEL: ElementCall Snapshots
+  # Bump to discard the build cache below.
+  CACHE_VERSION: '1'
+
+jobs:
+  # A nightly run of a main nobody has pushed to since the last green one would test the same tree
+  # again. Ten seconds on Linux to skip it; a dispatch or a release push always runs.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != schedule ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ui-tests.yml/runs?branch=$GITHUB_REF_NAME&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty')
+          if [ "$last" = "$GITHUB_SHA" ]; then
+            echo "Already green for $GITHUB_SHA."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The one thing the package's own tests cannot reach. Everything about a gesture except whether
+  # the touch arrives is covered in-process; a double tap declared correctly that something above
+  # the tile claims first looks identical to a working one from inside, and only a real touch tells
+  # them apart. The harness it drives is a sample app over the port fakes, so this needs no server
+  # and no camera.
+  ui-tests:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: macos-26
+    timeout-minutes: 75
+    concurrency:
+      group: ui-tests-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure Xcode
+        run: sudo xcode-select -s "$XCODE_APP"
+
+      # Under its own key rather than the package job's: this builds the example project, whose
+      # products live in a DerivedData folder the package job never makes.
+      - name: Cache build products
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: build-ui-${{ env.CACHE_VERSION }}-${{ env.XCODE_APP }}-${{ hashFiles('Package.resolved') }}
+
+      - name: Install tools
+        run: brew install xcodegen
+
+      - name: Create the simulator
+        id: simulator
+        run: |
+          udid=$(xcrun simctl create "$SIMULATOR_LABEL" "$SIMULATOR_NAME" "$SIMULATOR_RUNTIME")
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Generate the example project
+        working-directory: Example
+        run: xcodegen generate
+
+      # Retried, and only here: a real touch on a shared three-core runner is timing-dependent
+      # however a test is written, and these ran about five times slower than on a Mac. The package
+      # tests are not retried, because a flake there has been a real race more than once.
+      - name: Run UI tests
+        run: |
+          set -o pipefail && xcodebuild test \
+            -project Example/ElementCallExample.xcodeproj \
+            -scheme ElementCallExample \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -retry-tests-on-failure -test-iterations 3 \
+            -resultBundlePath Logs/ElementCallExampleUITests.xcresult \
+            | xcbeautify --renderer github-actions
+
+      # The oldest iOS the package supports, for the chrome's taps only. SwiftUI arbitrates a tap
+      # between a view and its parent differently there: iOS 18 gave the stage a tap on a tile as
+      # well, and the chrome hid and came straight back, which no iOS 26 run could see. Not a second
+      # copy of every class: this is the one whose gestures overlap the most.
+      #
+      # The newest iOS 18 the image has, and 18.6 downloaded if it has none. Picked before
+      # downloading: the image's older runtimes change under us, and a download costs minutes.
+      - name: Create the iOS 18 simulator
+        id: simulator18
+        if: success() || failure()
+        env:
+          IOS_VERSION: '18.6'
+        run: |
+          major="${IOS_VERSION%%.*}"
+          find_runtime() {
+            xcrun simctl list runtimes -j | jq -r --arg v "$major." \
+              '[.runtimes[] | select(.platform == "iOS" and .isAvailable and (.version | startswith($v)))] | last | .identifier // empty'
+          }
+          runtime=$(find_runtime)
+          if [ -z "$runtime" ]; then
+            xcodebuild -downloadPlatform iOS -buildVersion "$IOS_VERSION"
+            runtime=$(find_runtime)
+          fi
+          [ -n "$runtime" ] || { echo "::error::No iOS $major simulator runtime on this image."; exit 1; }
+          udid=$(xcrun simctl create "$SIMULATOR_LABEL" "$SIMULATOR_NAME" "$runtime")
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Run the chrome UI tests on iOS 18
+        if: (success() || failure()) && steps.simulator18.outcome == 'success'
+        run: |
+          set -o pipefail && xcodebuild test \
+            -project Example/ElementCallExample.xcodeproj \
+            -scheme ElementCallExample \
+            -destination "id=${{ steps.simulator18.outputs.udid }}" \
+            -only-testing:ElementCallExampleUITests/ChromeVisibilityUITests \
+            -retry-tests-on-failure -test-iterations 3 \
+            -resultBundlePath Logs/ElementCallExampleUITests-ios18.xcresult \
+            | xcbeautify --renderer github-actions
+
+      - name: Zip artifacts
+        if: failure()
+        run: |
+          for bundle in Logs/*.xcresult; do
+            [ -e "$bundle" ] && zip -r "$bundle.zip" "$bundle/"
+          done
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: test-results-ui
+          path: Logs/*.xcresult.zip
+          # A week, not a day: a nightly failure is often first looked at after a weekend.
+          retention-days: 7
+          if-no-files-found: ignore

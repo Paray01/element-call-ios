@@ -233,7 +233,7 @@ instead whether the `Tests` workflow already passed for the **exact commit** bei
 which of "no run at all", "still running" and "failed" it found.
 
 That is on purpose: `XCODE_APP`, `SIMULATOR_NAME` and `SIMULATOR_RUNTIME` are already duplicated
-between `tests.yml` and `record-snapshots.yml` (and `AGENTS.md`, and
+across `tests.yml`, `record-snapshots.yml` and `ui-tests.yml` (and `AGENTS.md`, and
 `Tests/ElementCallTests/Support/SnapshotEnvironment.swift`), and a release job that ran the tests
 itself would be another copy to keep in step. So the release gates on that run rather than repeating
 it — and a commit nobody has tested cannot be released.
