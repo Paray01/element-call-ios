@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.11 - 2026-10-15
+
 **`ElementCallActiveSpeakerGradient` is now `ElementCallBorderGradient.activeSpeaker`**, beside
 `.raisedHand`. A host theme that draws its own speaking ring can do the same for a raised hand by
 implementing `raisedHandBorder(in:)`; the default is design's.
@@ -36,6 +40,29 @@ rendered smaller is drawn larger than it was loaded.
 
 **`ElementCallIcon` gains `voiceCall`**, shown beside "Calling…" while a voice call rings. A host
 rendering its own icons maps it, to Compound's `voiceCallSolid`.
+
+
+
+### What's Changed
+
+✨ Features
+* Add a new high quality layer to upstream video (720p) by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/60
+* Add sound effects for leave and join in a call by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/63
+* Raise hand support by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/65
+* Ring the other person when you start a call in a DM by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/66
+
+🐛 Bugfixes
+* Fix tap on a tile toggling the chrome twice on iOS 18 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/62
+
+⚠️ API Changes
+* Build against Matrix Rust SDK 26.10.15 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/67
+
+Others
+* Release 0.1.0-rc.10 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/58
+* Update readme hero image by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/64
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.10...0.1.0-rc.11
 
 ## 0.1.0-rc.10 - 2026-10-08
 
