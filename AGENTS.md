@@ -91,15 +91,18 @@ names a file, run `swiftformat .` and commit the result with the change, not as 
 
 The pinned device and OS live in `Tests/ElementCallTests/Support/SnapshotEnvironment.swift`. The
 harness reads them and fails loudly when the simulator does not match. **The workflows do not read
-them**, despite the comment in `tests.yml` saying so: `XCODE_APP`, `SIMULATOR_NAME` and
-`SIMULATOR_RUNTIME` are duplicated literals in both workflow files, so changing the pinned device is
-three edits, not one. `release.yml` is deliberately not a fourth: it runs on Linux and gates on the
-`Tests` run for the commit rather than testing anything itself, and the example harness below is not
-a fourth either: its `ui-tests` job, sharded by test class so the wall clock is the longest shard
-rather than all 18 minutes, reads the same workflow-level `env` as the package job. One shard,
-`chrome-ios18`, swaps the runtime for iOS 18, the oldest supported: SwiftUI hands a tap on a tile to
-the stage behind it there as well, which no iOS 26 run can see. **A new UI test class must be added to a shard** in that job's matrix and to its `SHARDED` list; the job fails if one
-is in none.
+them**: `XCODE_APP`, `SIMULATOR_NAME` and `SIMULATOR_RUNTIME` are duplicated literals in
+`tests.yml`, `record-snapshots.yml` and `ui-tests.yml`, so changing the pinned device is four edits,
+not one. `release.yml` is deliberately not a fifth: it runs on Linux and gates on the `Tests` run for
+the commit rather than testing anything itself.
+
+**The UI tests below do not run on pull requests.** `ui-tests.yml` runs them nightly when `main` has
+moved, on pushes to `release/**`, and on demand, in one job: the whole bundle, then
+`ChromeVisibilityUITests` again on iOS 18, the oldest supported, where SwiftUI hands a tap on a tile
+to the stage behind it as well, which no iOS 26 run can see. Sharded across runners on every push,
+they held five Macs of a pool the company shares, and most of each shard was the same fixed cost
+paid again. So a change to a gesture is checked by dispatching that workflow on its branch, and a
+failed nightly notifies only whoever last edited its `cron` line.
 
 ### The example harness and the UI tests
 
