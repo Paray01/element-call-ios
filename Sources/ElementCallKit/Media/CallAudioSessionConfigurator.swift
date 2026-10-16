@@ -7,35 +7,29 @@
 
 import AVFoundation
 
-/// Configures the shared audio session for a call. Never activates it when CallKit is in charge
+/// Configures the shared audio session for a call. Never activates it when CallKit is in charge —
 /// CallKit activates the session and reports it through `didActivate`, and activating it ourselves
 /// makes that callback fire twice or not at all.
 public nonisolated enum CallAudioSessionConfigurator {
-    /// Set by the host once CallKit owns the call's session, cleared when the call ends; `configure()`
-    /// then does nothing. Changing the session during a call desynchronises the CallKit UI from the
-    /// real route 
-    public nonisolated(unsafe) static var isHeldByCallKit = false
-    
-    /// No options, like Apple's Speakerbox. `.defaultToSpeaker` makes the earpiece unreachable;
-    /// `.allowBluetoothHFP` makes the CallKit speaker button flip back to off while audio stays on the
-    /// speaker. Bluetooth still works, CallKit offers those routes during a call.
-    private static let options: AVAudioSession.CategoryOptions = []
     private static let relevantOptions: AVAudioSession.CategoryOptions =
         [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers, .duckOthers]
     
-    /// Category, then mode, as Speakerbox and WebRTC do; options are re-applied because they do not
-    /// always survive the mode change. Only what differs is set, so calling this twice is harmless.
+    /// Category, then mode, in two calls, as Speakerbox and WebRTC do. Developers report that setting
+    /// both at once (`setCategory(_:mode:options:)`) makes the CallKit speaker button flip back to off
+    /// while audio stays on the speaker.
+    ///
+    /// No options, like Apple's Speakerbox. `.defaultToSpeaker` makes the earpiece unreachable;
+    /// `.allowBluetoothHFP` also makes the speaker button flip back. Bluetooth still works, CallKit
+    /// offers those routes during a call.
+    ///
+    /// Only what differs is set, so calling this twice is harmless.
     public static func configure() throws {
-        guard !isHeldByCallKit else { return }
         let session = AVAudioSession.sharedInstance()
-        if session.category != .playAndRecord || session.categoryOptions.intersection(relevantOptions) != options {
-            try session.setCategory(.playAndRecord, options: options)
+        if session.category != .playAndRecord || !session.categoryOptions.isDisjoint(with: relevantOptions) {
+            try session.setCategory(.playAndRecord, options: [])
         }
         if session.mode != .voiceChat {
             try session.setMode(.voiceChat)
-        }
-        if session.categoryOptions.intersection(relevantOptions) != options {
-            try session.setCategory(.playAndRecord, options: options)
         }
         if abs(session.preferredSampleRate - Double(AudioFormat.sampleRate)) > 1 {
             try session.setPreferredSampleRate(Double(AudioFormat.sampleRate))
