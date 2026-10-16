@@ -61,7 +61,7 @@ struct ElementCallTileView: View, Equatable {
     /// known (019 R4).
     var contentFit: ElementCallTileFit = .standard
     /// Whether a double tap, or VoiceOver's action, may take this tile full screen. Not our own
-    /// tile in a small call (019 R14).
+    /// floating tile (019 R14).
     var allowsFullscreen = true
     /// The device has a camera on each side, so the flip button does something (019 R24).
     var canSwitchCamera = true
